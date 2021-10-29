@@ -38,13 +38,13 @@ state = oryx.core.state
 ppl = oryx.core.ppl
 
 # Hyperparameters
-num_results = 10000
+num_results = 20000 # 10k takes 11min
 num_burnin_steps = 200
 step_size = 5e-4 # This was optimized by DASSA on 400steps
 num_leapfrog_steps = 100
 num_adaptation_steps = 100 #Somewhat smaller than number of burnin
-target_accept_prob = 0.7
-seed = int(os.environ['SLURM_ARRAY_TASK_ID'])
+target_accept_prob = 0.85
+seed = int(os.environ['SLURM_ARRAY_TASK_ID']) + int(os.environ['SLURM_ARRAY_JOB_ID'])
 results_dir = f'../../results/job_{os.environ["SLURM_ARRAY_JOB_ID"]}/'
 
 
@@ -97,7 +97,8 @@ def define_target_log_prob(model, xloc, iloc, observed, uncertainty, alpha, cmf,
     def target_log_prob(xs):
         
         # Include logprior in loglikelihood. This keeps HMC from going off into no-mans land.
-        penalty = 1e9
+        penalty = 1e5 # Penalty for leaving uniform prior region.
+        #epsilon = 1e-2 # Buffer region around boundary? Probably not needed.
         nlogprior = 0.
         for i in range(5):
             nlogprior += penalty * (jnp.minimum(0., xs[i])) # Penalty for being <0
