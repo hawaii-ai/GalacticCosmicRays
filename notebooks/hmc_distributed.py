@@ -2,9 +2,9 @@
 # Author: Peter Oct 28 2021
 
 # Requirements: 
-#!module load system/CUDA/11.0.2 
-#!pip install --upgrade jax jaxlib==0.1.68+cuda110 -f https://storage.googleapis.com/jax-releases/jax_releases.html 
-#!pip install tensorflow-io oryx elegy
+# !module load system/CUDA/11.0.2 
+# !pip install --upgrade jax jaxlib==0.1.68+cuda110 -f https://storage.googleapis.com/jax-releases/jax_releases.html 
+# !pip install tensorflow-io oryx elegy
 
 import os
 import jax
@@ -21,7 +21,7 @@ from tensorflow_probability.substrates import jax as tfp
 tfd = tfp.distributions
 
 # Hyperparameters
-num_results = 100000 # 10k takes 11min
+num_results = 500000 # 10k takes 11min. About 1/5 of these accepted.
 num_burnin_steps = 1000 #500
 num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
 target_accept_prob = 0.3
@@ -34,7 +34,10 @@ seed = int(os.environ['SLURM_ARRAY_TASK_ID']) + int(os.environ['SLURM_ARRAY_JOB_
 results_dir = f'../../results/job_{os.environ["SLURM_ARRAY_JOB_ID"]}/'
 
 # Load observation data and define logprob.
-target_log_prob = gcr_utils.define_log_prob(model_path)
+interval = '20110520-20110610'
+data_path = f'../data/oct2022/AMS02_H-PRL2018/AMS02_H-PRL2018_{interval}.dat'
+alpha, cmf = gcr_utils.get_alpha_cmf('../data/oct2022/AMS02_H-PRL2018_heliosphere.dat', interval)
+target_log_prob = gcr_utils.define_log_prob(model_path, data_path, alpha, cmf)
 
 @jit
 def run_chain(key, state):

@@ -11,6 +11,7 @@ import elegy # pip install elegy.
 import time
 from datetime import datetime
 import matplotlib.pyplot as plt
+import pandas as pd
 
 # These are the 245 rigidity vals for the NN training data.
 RIGIDITY_VALS = np.array([  1.0001013,   1.022055 ,   1.0444907,   1.0674188,   1.0908501,
@@ -63,21 +64,41 @@ RIGIDITY_VALS = np.array([  1.0001013,   1.022055 ,   1.0444907,   1.0674188,   
        164.49684  , 168.10779  , 171.798    , 175.56921  , 179.42322  ,
        183.36182  , 187.38689  , 191.5003   , 195.70401  , 200.       ])
 
-def load_data_ams():
-    """ Load AMS data from Claudio."""
-    filename = '../data/BR2461.dat'
-    alpha, cmf = 69.19, 5.17 # These are fixed for the current experiment.
+def get_alpha_cmf(filename, interval: str = None):
+    """ Load alpha and cmf from file supplied by Claudio.
+        Use alpha and cmf mean over interval. 
+        Ignores std for now.
+    """
+    if 'BR2461.dat' in filename:
+        assert interval == None
+        alpha, cmf = 69.19, 5.17 # These are fixed for the current experiment.
+
+    df = pd.read_csv(filename, sep=' ', skiprows=1, names=['interval', 'alpha', 'cmf', 'alpha_std', 'cmf_std'])
+    row = df.loc[df['interval'] == interval]
+    alpha = row['alpha'].values[0]
+    cmf = row['cmf'].values[0]
+    return alpha, cmf
+        
+    
+def load_data_ams(filename):
+    """ Load AMS data from Claudio.
+    Args:
+        filename = Filename of observations.
+                   Original dataset was '../data/BR2461.dat'
+    """
     dataset_ams = np.loadtxt(filename) # Rigidity1, Rigidity2, Flux, Error
     r1, r2 = dataset_ams[:,0], dataset_ams[:,1]
     bins = np.concatenate([r1[:], r2[-1:]])
     observed = dataset_ams[:,2]   # Observed Flux
     uncertainty = dataset_ams[:,3]
     assert len(bins) == len(observed)+1
-    return bins, observed, uncertainty, alpha, cmf
+    return bins, observed, uncertainty
 
-def load_preprocessed_data_ams():
-    """ Load AMS data along with hardcoded auxiliary vectors for ppmodel."""
-    bins, observed, uncertainty, alpha, cmf = load_data_ams()
+
+def load_preprocessed_data_ams(filename):
+    """ Load AMS data along with hardcoded auxiliary vectors for ppmodel.
+    """
+    bins, observed, uncertainty = load_data_ams(filename)
     # iloc = np.searchsorted(RIGIDITY_VALS, bins)
     # xloc = np.sort(np.concatenate([RIGIDITY_VALS, bins]))
     # assert np.all(xloc[iloc] == bins)
@@ -87,7 +108,8 @@ def load_preprocessed_data_ams():
     iloc = np.where(sorted_indices>=len(RIGIDITY_VALS))[0]
     assert np.all(xloc[iloc] == bins)
     
-    return xloc, iloc, observed, uncertainty, alpha, cmf
+    return xloc, iloc, observed, uncertainty
+
 
 def remove_consecutive_duplicates(samples, aux=[], atol=0.0):
     ''' 
@@ -109,7 +131,8 @@ def remove_consecutive_duplicates(samples, aux=[], atol=0.0):
         a = a[1:,...][~consecutive_repeat_rows, ...]
         aux_return.append(a)
     return samples[1:,...][~consecutive_repeat_rows, :], aux_return
-    
+
+
 def define_nn_pred(model_path, normalize_input_flag=False, denormalize_output_flag=True, rebin_output_flag=False):
     # Load trained NN model that maps 7 parameters to predicted flux at rigidity vals range(245).
     model = elegy.load(model_path)
@@ -127,6 +150,7 @@ def define_nn_pred(model_path, normalize_input_flag=False, denormalize_output_fl
         return yhat
     return f
 
+
 def minmax_scale_input(X):
     '''Parameters from HMC are all in min-max scaled space.'''
     input_dim = X.ndim
@@ -142,6 +166,7 @@ def minmax_scale_input(X):
     RANGE = MAX - MIN
     rval = (X - MIN) / RANGE
     return rval
+
 
 def deminmax_scale_input(X):
     '''Parameters from HMC are all in min-max scaled space. Undo minmax scaling. '''
@@ -159,6 +184,7 @@ def deminmax_scale_input(X):
     rval = X * RANGE + MIN
     return rval
 
+
 def denormalize_output(yhat):
     # Normalization: xnorm = log(x+1) / 8.268953
     # Inversion: x = exp(xnorm*8.268953) - 1
@@ -166,9 +192,10 @@ def denormalize_output(yhat):
     yhat = jnp.exp(yhat) - 1. # Undo logp1 transform of target output.
     return yhat
 
-def rebin_output(yhat):
+
+def rebin_output(yhat, data_path):
     # Interpolate to get predicted flux at both lattice and bin points.
-    xloc, iloc, observed, uncertainty, alpha, cmf = load_preprocessed_data_ams()
+    xloc, iloc, observed, uncertainty = load_preprocessed_data_ams(data_path)
     yloc = jnp.interp(xloc, RIGIDITY_VALS, yhat) 
     # Integrate over bin regions, and compare to observed to get likelihood.
     rebinned = np.zeros(45)
@@ -180,9 +207,10 @@ def rebin_output(yhat):
         rebinned[i] = area / length
     return rebinned
 
-def calc_loglikelihood(yhat):
+
+def calc_loglikelihood(yhat, data_path):
     # Interpolate to get predicted flux at both lattice and bin points.
-    xloc, iloc, observed, uncertainty, alpha, cmf = load_preprocessed_data_ams()
+    xloc, iloc, observed, uncertainty = load_preprocessed_data_ams(data_path)
     yloc = jnp.interp(xloc, RIGIDITY_VALS, yhat) 
     chi2 = 0.0
     for i in range(45):
@@ -195,13 +223,14 @@ def calc_loglikelihood(yhat):
         chi2 += ((predicted - observed[i])/uncertainty[i])**2
     return -chi2/2
 
-def define_log_prob(model_path):
+
+def define_log_prob(model_path, data_path, alpha, cmf):
     # Load trained NN model that maps 7 parameters to predicted flux at RIGIDITY_VALS.
     model = elegy.load(model_path)
     model.run_eagerly = True # Settable attribute. Required to be true for ppmodel.
 
     # Load observation data from Claudio
-    xloc, iloc, observed, uncertainty, alpha, cmf = load_preprocessed_data_ams()
+    xloc, iloc, observed, uncertainty = load_preprocessed_data_ams(data_path)
     alpha_norm = (alpha - 20.) / 55. # Min max scaling
     cmf_norm = (cmf - 4.5) / 4. # Min max scaling
     

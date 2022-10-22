@@ -5,11 +5,11 @@
 ##SBATCH --account=sadow
 ##SBATCH --nodelist=gpu-0008
 
-#SBATCH --array=1-100                # Array range
+#SBATCH --array=1-1                # Array range
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=3
 #SBATCH --mem=15000 ## max amount of memory per node you require
-#SBATCH --time=0-08:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared
+#SBATCH --time=3-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared
 
 #SBATCH --job-name=hmc
 ##SBATCH --output=job.out
