@@ -5,7 +5,7 @@
 ##SBATCH --account=sadow
 ##SBATCH --nodelist=gpu-0008
 
-#SBATCH --array=1-1                # Array range
+#SBATCH --array=0-110                # Array range
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=3
 #SBATCH --mem=15000 ## max amount of memory per node you require

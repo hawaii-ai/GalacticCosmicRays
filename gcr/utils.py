@@ -4,7 +4,7 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from jax import random, vmap, jit, grad
-assert jax.default_backend() == 'gpu'
+#assert jax.default_backend() == 'gpu'
 
 import elegy # pip install elegy. 
 
@@ -12,6 +12,13 @@ import time
 from datetime import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
+
+# These parameter don't include, alpha and cmf, which have been specified.
+PARAMETERS = ['cpa', 'pwr1par', 'pwr2par', 'pwr1perr', 'pwr2perr']
+MIN_PARAMETERS = np.array([50., 0.2, 0.2, 0.2, 0.2]) 
+MAX_PARAMETERS = np.array([250., 2., 2.3, 2., 2.3]) 
+RANGE_PARAMETERS = MAX_PARAMETERS - MIN_PARAMETERS
+
 
 # These are the 245 rigidity vals for the NN training data.
 RIGIDITY_VALS = np.array([  1.0001013,   1.022055 ,   1.0444907,   1.0674188,   1.0908501,
@@ -63,6 +70,17 @@ RIGIDITY_VALS = np.array([  1.0001013,   1.022055 ,   1.0444907,   1.0674188,   
        147.57277  , 150.8122   , 154.12276  , 157.50597  , 160.96346  ,
        164.49684  , 168.10779  , 171.798    , 175.56921  , 179.42322  ,
        183.36182  , 187.38689  , 191.5003   , 195.70401  , 200.       ])
+
+
+def get_interval(filename, index: int) -> str:
+    """Read filename and return interval at index (zero indexed, so first index is 0)."""
+    assert index >= 0, index
+    df = pd.read_csv(filename, sep=' ', skiprows=1, names=['interval', 'alpha', 'cmf', 'alpha_std', 'cmf_std'])
+    if index < df.shape[0]:
+        return df['interval'].values[index]
+    else:
+        raise ValueError(f'Index {index} exceeds zero-indexed list of intervals in {filename} of length {df.shape[0]}.')
+
 
 def get_alpha_cmf(filename, interval: str = None):
     """ Load alpha and cmf from file supplied by Claudio.
@@ -155,12 +173,12 @@ def minmax_scale_input(X):
     '''Parameters from HMC are all in min-max scaled space.'''
     input_dim = X.ndim
     if (X.ndim == 1 and len(X) == 7) or (X.ndim == 2 and X.shape[1] == 7):
-        MIN = np.array([20., 4.5, 50., 0.2, 0.2, 0.2, 0.2])
-        MAX = np.array([75., 8.5, 250., 2., 2.3, 2., 2.3])
+        MIN = np.concatenate([np.array([20., 4.5]), MIN_PARAMETERS])
+        MAX = np.concatenate([np.array([75., 8.5]), MAX_PARAMETERS])
     elif (X.ndim == 1 and len(X) == 5) or (X.shape[1] == 5):
-        # Assume alpha and cmf have been specified.
-        MIN = np.array([50., 0.2, 0.2, 0.2, 0.2]) 
-        MAX = np.array([250., 2., 2.3, 2., 2.3]) 
+        # Assume alpha and cmf have already been specified separately.
+        MIN = MIN_PARAMETERS
+        MAX = MAX_PARAMETERS 
     else:
         raise Exception
     RANGE = MAX - MIN
@@ -172,12 +190,12 @@ def deminmax_scale_input(X):
     '''Parameters from HMC are all in min-max scaled space. Undo minmax scaling. '''
     input_dim = X.ndim
     if (X.ndim == 1 and len(X) == 7) or (X.ndim == 2 and X.shape[1] == 7):
-        MIN = np.array([20., 4.5, 50., 0.2, 0.2, 0.2, 0.2])
-        MAX = np.array([75., 8.5, 250., 2., 2.3, 2., 2.3])
+        MIN = np.concatenate([np.array([20., 4.5]), MIN_PARAMETERS])
+        MAX = np.concatenate([np.array([75., 8.5]), MAX_PARAMETERS])
     elif (X.ndim == 1 and len(X) == 5) or (X.shape[1] == 5):
-        # Assume alpha and cmf have been specified.
-        MIN = np.array([50., 0.2, 0.2, 0.2, 0.2]) 
-        MAX = np.array([250., 2., 2.3, 2., 2.3]) 
+        # Assume alpha and cmf have already been specified separately.
+        MIN = MIN_PARAMETERS
+        MAX = MAX_PARAMETERS
     else:
         raise Exception
     RANGE = MAX - MIN
@@ -198,8 +216,9 @@ def rebin_output(yhat, data_path):
     xloc, iloc, observed, uncertainty = load_preprocessed_data_ams(data_path)
     yloc = jnp.interp(xloc, RIGIDITY_VALS, yhat) 
     # Integrate over bin regions, and compare to observed to get likelihood.
-    rebinned = np.zeros(45)
-    for i in range(45):
+    nbins = len(iloc)-1
+    rebinned = np.zeros(nbins)
+    for i in range(nbins):
         # Integrate over bin by trapezoid method.
         istart, istop = iloc[i], iloc[i+1]
         area = jnp.trapz(y=yloc[istart:(istop+1)], x=xloc[istart:(istop+1)])
@@ -213,7 +232,8 @@ def calc_loglikelihood(yhat, data_path):
     xloc, iloc, observed, uncertainty = load_preprocessed_data_ams(data_path)
     yloc = jnp.interp(xloc, RIGIDITY_VALS, yhat) 
     chi2 = 0.0
-    for i in range(45):
+    nbins = len(iloc)-1
+    for i in range(nbins):
         # Integrate over bin by trapezoid method.
         istart, istop = iloc[i], iloc[i+1]
         area = jnp.trapz(y=yloc[istart:(istop+1)], x=xloc[istart:(istop+1)])
@@ -222,6 +242,15 @@ def calc_loglikelihood(yhat, data_path):
         # Use equation provided by Claudio for likelihood of bin.
         chi2 += ((predicted - observed[i])/uncertainty[i])**2
     return -chi2/2
+
+
+def remove_outliers(samples, buffer=0):
+    """Remove samples that exceed min, max range. 
+    """
+    assert samples.shape[1] == 5
+    outlier = np.bitwise_or(samples < MIN_PARAMETERS - buffer, samples > MAX_PARAMETERS + buffer)
+    outlier = np.any(outlier, axis=1)
+    return samples[~outlier, :]
 
 
 def define_log_prob(model_path, data_path, alpha, cmf):
@@ -252,9 +281,10 @@ def define_log_prob(model_path, data_path, alpha, cmf):
         
         # Interpolate to get predicted flux at both lattice and bin points.
         yloc = jnp.interp(xloc, RIGIDITY_VALS, yhat) 
+        nbins = len(iloc)-1
         # Integrate over bin regions, and compare to observed to get likelihood.
         chi2 = 0.0
-        for i in range(45):
+        for i in range(nbins):
             # Integrate over bin by trapezoid method.
             istart, istop = iloc[i], iloc[i+1]
             area = jnp.trapz(y=yloc[istart:(istop+1)], x=xloc[istart:(istop+1)])

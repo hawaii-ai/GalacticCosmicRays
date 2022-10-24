@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 from jax import random, vmap, jit, grad
 assert jax.default_backend() == 'gpu'
-import gcr_utils
+import utils
 import numpy as np
 import time
 from datetime import datetime
@@ -20,24 +20,30 @@ import elegy # pip install elegy.
 from tensorflow_probability.substrates import jax as tfp
 tfd = tfp.distributions
 
+# Arguments
+SLURM_ARRAY_TASK_ID = int(os.environ['SLURM_ARRAY_TASK_ID'])
+SLURM_ARRAY_JOB_ID = int(os.environ['SLURM_ARRAY_JOB_ID'])
+seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
+results_dir = f'../../results/job_{SLURM_ARRAY_JOB_ID}/'
+#results_id = f'{SLURM_ARRAY_TASK_ID}_{SLURM_ARRAY_JOB_ID}' 
+model_path = '../models/model_2_256_selu_l21e-6' #'model_2_256_selu_l21e-6_do' # 'model_2_256_selu_l21e-6' #'model_2_256_selu'
+
+# Load observation data and define logprob.
+expname = 'AMS02_H-PRL2021' # 'AMS02_H-PRL2018', 'AMS02_H-PRL2021', 'PAMELA_H-ApJ2013', 'PAMELA_H-ApJL2018'
+filename_heliosphere = f'../data/oct2022/{expname}_heliosphere.dat'
+interval = utils.get_interval(filename_heliosphere, SLURM_ARRAY_TASK_ID) # e.g. '20110520-20110610'
+data_path = f'../data/oct2022/{expname}/{expname}_{interval}.dat'
+alpha, cmf = utils.get_alpha_cmf(filename_heliosphere, interval)
+target_log_prob = utils.define_log_prob(model_path, data_path, alpha, cmf)
+
 # Hyperparameters
-num_results = 500000 # 10k takes 11min. About 1/5 of these accepted.
+num_results = 500000 #500000 # 10k takes 11min. About 1/5 of these accepted.
 num_burnin_steps = 1000 #500
 num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
 target_accept_prob = 0.3
 step_size = 1e-3 # 1e-5 has 0.95 acc rate and moves. 1e-4 0.0 acc.
 num_leapfrog_steps = 100
 max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
-model_path = 'model_2_256_selu_l21e-6' #'model_2_256_selu_l21e-6_do' # 'model_2_256_selu_l21e-6' #'model_2_256_selu'
-
-seed = int(os.environ['SLURM_ARRAY_TASK_ID']) + int(os.environ['SLURM_ARRAY_JOB_ID'])
-results_dir = f'../../results/job_{os.environ["SLURM_ARRAY_JOB_ID"]}/'
-
-# Load observation data and define logprob.
-interval = '20110520-20110610'
-data_path = f'../data/oct2022/AMS02_H-PRL2018/AMS02_H-PRL2018_{interval}.dat'
-alpha, cmf = gcr_utils.get_alpha_cmf('../data/oct2022/AMS02_H-PRL2018_heliosphere.dat', interval)
-target_log_prob = gcr_utils.define_log_prob(model_path, data_path, alpha, cmf)
 
 @jit
 def run_chain(key, state):
@@ -88,7 +94,7 @@ def run_chain(key, state):
 start_time = time.time()
 np.random.seed(seed)
 state = np.random.random((5,)) #jnp.random.random((5,), dtype='float32') # used for 29091984
-#state = jnp.array(gcr_utils.minmax_scale_input(np.array([90, .5, 1.7, 1.4, 1.1 ]))) # This is ~MLE
+#state = jnp.array(utils.minmax_scale_input(np.array([90, .5, 1.7, 1.4, 1.1 ]))) # This is ~MLE
 #state = 0.5 * jnp.ones((5,), dtype='float32')
 key = random.PRNGKey(seed)
 unnormalized_samples, pkr = run_chain(key, state)
@@ -96,16 +102,16 @@ print('Finished in %d minutes.' % int((time.time() - start_time)//60))
 
 # De-normalize samples and remove duplicates.
 unnormalized_samples = unnormalized_samples.to_py()
-all_samples = gcr_utils.deminmax_scale_input(unnormalized_samples)
-samples, pkr_select = gcr_utils.remove_consecutive_duplicates(all_samples, pkr, atol=0.0)
+all_samples = utils.deminmax_scale_input(unnormalized_samples)
+samples, pkr_select = utils.remove_consecutive_duplicates(all_samples, pkr, atol=0.0)
 all_log_accept_ratio, all_log_probs, all_step_sizes = pkr
 log_accept_ratio, log_probs, step_sizes  = pkr_select
-#samples, (log_accept_ratio, log_probs, step_sizes) = gcr_utils.remove_consecutive_duplicates(all_samples, (log_accept_ratio, log_probs, step_sizes))
+#samples, (log_accept_ratio, log_probs, step_sizes) = utils.remove_consecutive_duplicates(all_samples, (log_accept_ratio, log_probs, step_sizes))
 print(f'Acceptance rate: {len(samples)/len(all_samples)}. Decrease step_size to increase rate.')
 
 # Save results: samples and plots
-np.savetxt(fname=f'{results_dir}/samples_{seed}.csv', X=samples, delimiter=',')
-np.savetxt(fname=f'{results_dir}/logacceptratio_{seed}.csv', X=log_accept_ratio, delimiter=',')
-np.savetxt(fname=f'{results_dir}/log_probs_{seed}.csv', X=log_probs, delimiter=',')
-np.savetxt(fname=f'{results_dir}/stepsizes_{seed}.csv', X=step_sizes, delimiter=',')
+np.savetxt(fname=f'{results_dir}/samples_{SLURM_ARRAY_TASK_ID}.csv', X=samples, delimiter=',')
+np.savetxt(fname=f'{results_dir}/logacceptratio_{SLURM_ARRAY_TASK_ID}.csv', X=log_accept_ratio, delimiter=',')
+np.savetxt(fname=f'{results_dir}/log_probs_{SLURM_ARRAY_TASK_ID}.csv', X=log_probs, delimiter=',')
+np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_sizes, delimiter=',')
 
