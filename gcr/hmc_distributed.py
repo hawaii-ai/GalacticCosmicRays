@@ -41,10 +41,9 @@ filename_heliosphere = f'../data/oct2022/{EXPERIMENT_NAME}_heliosphere.dat'
 interval = utils.get_interval(filename_heliosphere, SLURM_ARRAY_TASK_ID) # e.g. '20110520-20110610'
 alpha, cmf = utils.get_alpha_cmf(filename_heliosphere, interval)
 data_path = f'../data/oct2022/{EXPERIMENT_NAME}/{EXPERIMENT_NAME}_{interval}.dat'
-#model_path = '../models/model_2_256_selu_l21e-6' #'model_2_256_selu_l21e-6_do' # 'model_2_256_selu_l21e-6' #'model_2_256_selu'
-model_path = './model_2_256_selu_l21e-6'
+model_path = '../models/model_2_256_selu_l21e-6' #'model_2_256_selu_l21e-6_do' # 'model_2_256_selu_l21e-6' #'model_2_256_selu'
 seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
-target_log_prob = utils.define_log_prob(model_path, data_path, alpha, cmf)
+target_log_prob = utils.define_log_prob(model_path, data_path, alpha, cmf, penalty=0)
 
 # Hyperparameters
 num_results = 150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97

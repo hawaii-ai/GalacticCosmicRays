@@ -71,6 +71,9 @@ RIGIDITY_VALS = np.array([  1.0001013,   1.022055 ,   1.0444907,   1.0674188,   
        164.49684  , 168.10779  , 171.798    , 175.56921  , 179.42322  ,
        183.36182  , 187.38689  , 191.5003   , 195.70401  , 200.       ])
 
+# Claudio suggested providing predictions on this subset of the 245 rigidity values on Nov 2022 to save space.
+RIGIDITY_INDEX_SUBSET = [0, 1, 3, 6, 10, 16, 22, 30, 40, 50, 61, 74, 88, 104, 120, 138, 157, 177, 198, 213, 221, 230, 244]
+
 
 def get_interval(filename, index: int) -> str:
     """Read filename and return interval at index (zero indexed, so first index is 0)."""
@@ -244,16 +247,20 @@ def calc_loglikelihood(yhat, data_path):
     return -chi2/2
 
 
-def remove_outliers(samples, buffer=0):
+def remove_outliers(samples,  min_bound=MIN_PARAMETERS, max_bound=MAX_PARAMETERS, buffer=0):
     """Remove samples that exceed min, max range. 
     """
     assert samples.shape[1] == 5
-    outlier = np.bitwise_or(samples < MIN_PARAMETERS - buffer, samples > MAX_PARAMETERS + buffer)
+    outlier = np.bitwise_or(samples < min_bound - buffer, samples > max_bound + buffer)
     outlier = np.any(outlier, axis=1)
     return samples[~outlier, :]
 
 
-def define_log_prob(model_path, data_path, alpha, cmf):
+def define_log_prob(model_path, data_path, alpha, cmf, penalty=1e9):
+    """
+    Args:
+      penalty = scalar to punish drifting outside zone of interest. 
+    """
     # Load trained NN model that maps 7 parameters to predicted flux at RIGIDITY_VALS.
     model = elegy.load(model_path)
     model.run_eagerly = True # Settable attribute. Required to be true for ppmodel.
@@ -270,7 +277,6 @@ def define_log_prob(model_path, data_path, alpha, cmf):
 
     def target_log_prob(xs):
         # Include logprior in loglikelihood. This keeps HMC from going off into no-mans land.
-        penalty = 1e9 
         nlogprior = 0.
         for i in range(5):
             nlogprior += penalty * jnp.abs((jnp.minimum(0., xs[i]))) # Penalty for being <0
