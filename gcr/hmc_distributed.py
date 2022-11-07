@@ -1,7 +1,13 @@
 # Distributed HMC with Oryx on Mana
-# Author: Peter Oct 28 2021
+# Author: Peter Nov 5 2022
 
-# Requirements: 
+# New Requirements:
+# conda install python=3.9 numpy scipy pandas matplotlib
+### Version 0.3.24 didn't work: pip install --upgrade "jax[cuda]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# pip install -Iv jax==0.3.16 jaxlib==0.3.15+cuda11.cudnn82 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# pip install elegy tfp-nightly
+
+# Old Requirements: 
 # !module load system/CUDA/11.0.2 
 # !pip install --upgrade jax jaxlib==0.1.68+cuda110 -f https://storage.googleapis.com/jax-releases/jax_releases.html 
 # !pip install tensorflow-io oryx elegy
@@ -14,6 +20,7 @@ assert jax.default_backend() == 'gpu'
 import utils
 import numpy as np
 import time
+from pathlib import Path
 from datetime import datetime
 import matplotlib.pyplot as plt
 import elegy # pip install elegy. 
@@ -23,21 +30,24 @@ tfd = tfp.distributions
 # Arguments
 SLURM_ARRAY_TASK_ID = int(os.environ['SLURM_ARRAY_TASK_ID'])
 SLURM_ARRAY_JOB_ID = int(os.environ['SLURM_ARRAY_JOB_ID'])
-seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
-results_dir = f'../../results/job_{SLURM_ARRAY_JOB_ID}/'
-#results_id = f'{SLURM_ARRAY_TASK_ID}_{SLURM_ARRAY_JOB_ID}' 
-model_path = '../models/model_2_256_selu_l21e-6' #'model_2_256_selu_l21e-6_do' # 'model_2_256_selu_l21e-6' #'model_2_256_selu'
+EXPERIMENT_NAME = os.environ['EXPERIMENT_NAME'] #'AMS02_H-PRL2021' # 'AMS02_H-PRL2018', 'AMS02_H-PRL2021', 'PAMELA_H-ApJ2013', 'PAMELA_H-ApJL2018'
 
-# Load observation data and define logprob.
-expname = 'AMS02_H-PRL2021' # 'AMS02_H-PRL2018', 'AMS02_H-PRL2021', 'PAMELA_H-ApJ2013', 'PAMELA_H-ApJL2018'
-filename_heliosphere = f'../data/oct2022/{expname}_heliosphere.dat'
+# Setup  output directory.
+results_dir = f'../../results/{EXPERIMENT_NAME}/'
+Path(results_dir).mkdir(parents=True, exist_ok=True)
+
+# Load observation data and define logprob. 
+filename_heliosphere = f'../data/oct2022/{EXPERIMENT_NAME}_heliosphere.dat'
 interval = utils.get_interval(filename_heliosphere, SLURM_ARRAY_TASK_ID) # e.g. '20110520-20110610'
-data_path = f'../data/oct2022/{expname}/{expname}_{interval}.dat'
 alpha, cmf = utils.get_alpha_cmf(filename_heliosphere, interval)
+data_path = f'../data/oct2022/{EXPERIMENT_NAME}/{EXPERIMENT_NAME}_{interval}.dat'
+#model_path = '../models/model_2_256_selu_l21e-6' #'model_2_256_selu_l21e-6_do' # 'model_2_256_selu_l21e-6' #'model_2_256_selu'
+model_path = './model_2_256_selu_l21e-6'
+seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
 target_log_prob = utils.define_log_prob(model_path, data_path, alpha, cmf)
 
 # Hyperparameters
-num_results = 500000 #500000 # 10k takes 11min. About 1/5 of these accepted.
+num_results = 150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
 num_burnin_steps = 1000 #500
 num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
 target_accept_prob = 0.3

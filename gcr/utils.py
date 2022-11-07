@@ -277,7 +277,9 @@ def define_log_prob(model_path, data_path, alpha, cmf):
             nlogprior += penalty * jnp.abs((jnp.maximum(1., xs[i]) - 1.))  # Penalty for being >1
 
         xs = jnp.concatenate([jnp.array([alpha_norm, cmf_norm]), xs]) # Create 7d input to NN.
+        xs = jnp.reshape(xs, (1,7)) # Added because Jax was throwing shape error. Need batch dimension.
         yhat = nn_predict(xs)
+        yhat = yhat[0,:]  # Remove batch dimension.
         
         # Interpolate to get predicted flux at both lattice and bin points.
         yloc = jnp.interp(xloc, RIGIDITY_VALS, yhat) 
