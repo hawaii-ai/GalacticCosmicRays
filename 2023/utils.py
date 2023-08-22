@@ -239,7 +239,7 @@ def remove_outliers(samples,  min_bound=PARAMETERS_MIN, max_bound=PARAMETERS_MAX
 
 
 
-def _form_batch(params_trans, params_spec_trans:tuple):
+def _form_batch(params_trans, params_spec_trans):
     """
     Create jnp batch from sets of ordered features.
     These should already be transformed.
@@ -250,15 +250,24 @@ def _form_batch(params_trans, params_spec_trans:tuple):
     Output:
         xs = njp array with dimensions (batch=1, -1)
     """
-    if params_trans.ndim==1 or type(params_spec_trans) == tuple:
+    if type(params_spec_trans) == tuple:
+        # this is the case during HMC
         alpha, cmf, vspoles = params_spec_trans  # Should only have three.
+        assert params_trans.ndim==1, params_trans.ndim
         xs = jnp.concatenate([jnp.array([alpha, cmf]), params_trans, jnp.array([vspoles])])
         # Assumes we are doing on example at a time, as in MCMC
         xs = jnp.reshape(xs, (1,8)) # Added because Jax was throwing shape error. Need batch dimension.
-    elif isinstance(params_spec_trans, type(jnp.array([]))):
-        # This is used after the MCMC to get nn predictions on the samples. Can handle batches
+    else: # elif isinstance(params_spec_trans, type(jnp.array([])))
+        # This is used after the MCMC to get nn predictions on the samples. Can handle batches.
+        if params_trans.ndim==1:
+            params_trans = params_trans.reshape((1,-1))
+        if params_spec_trans.ndim==1:
+            # Need to reshape into example by feature matrix.
+            params_spec_trans = params_spec_trans.reshape((1,-1))
         broadcasted_spec = params_spec_trans.repeat(params_trans.shape[0], axis=0)
         xs = jnp.concatenate([broadcasted_spec[:,0:2], params_trans, broadcasted_spec[:,2:3]], axis=1)
+    # else:
+    #     raise Exception()
     return xs
 
 
@@ -275,16 +284,28 @@ def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9):
     model.run_eagerly = True # Settable attribute (in elegy). Required to be true for ppmodel.
 
     # Load observation data from Claudio
-    xloc, iloc, observed, uncertainty = load_preprocessed_data_ams(data_path)
+    #xloc, iloc, observed, uncertainty = load_preprocessed_data_ams(data_path) # Replaced with bin midpoints
+    bins, observed, uncertainty = load_data_ams(data_path)
+    #bin_midpoints = (bins[:-1] + bins[1:])/2  # Arithmetic 
+    bin_midpoints = (bins[:-1] * bins[1:]) ** 0.5  # Geometric mean seemed to work better in exp.
     parameters_specified_transformed = transform_input(jnp.array(parameters_specified))
     
-
-    def nn_predict(x):
-        yhat = model(x)    
-        yhat = untransform_output(yhat) # Undo scaling and minmax.
-        return yhat
+    # def nn_predict(x):
+    #     """
+    #     Predict fluxes (untransformed) from transformed input. 
+    #     """
+    #     yhat = model(x)    
+    #     yhat = untransform_output(yhat) # Undo scaling and minmax.
+    #     return yhat
 
     def target_log_prob(xs):
+        """
+        Compute log likilihood of parameters given some data.
+        Args:
+            xs: 1d array containing parameters (transformed to be in range 0--1).
+        Returns:
+            log_prob: Scalar valued log probability
+        """
         # Include logprior in loglikelihood. This keeps HMC from going off into no-mans land.
         nlogprior = 0.
         for i in range(5):
@@ -292,25 +313,45 @@ def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9):
             nlogprior += penalty * jnp.abs((jnp.maximum(1., xs[i]) - 1.))  # Penalty for being >1
 
         batch = _form_batch(xs, parameters_specified_transformed)
-        yhat = nn_predict(batch)
+        yhat = model(batch)    
         yhat = yhat[0,:]  # Remove batch dimension.
         
-        # Interpolate to get predicted flux at both lattice and bin points.
-        yloc = jnp.interp(xloc, RIGIDITY_VALS, yhat) 
-        nbins = len(iloc)-1
-        # Integrate over bin regions, and compare to observed to get likelihood.
-        chi2 = 0.0
-        for i in range(nbins):
-            # Integrate over bin by trapezoid method.
-            istart, istop = iloc[i], iloc[i+1]
-            area = jnp.trapz(y=yloc[istart:(istop+1)], x=xloc[istart:(istop+1)])
-            length = (xloc[istop] - xloc[istart])
-            predicted = area / length
-            # Use equation provided by Claudio for likelihood of bin.
-            chi2 += ((predicted - observed[i])/uncertainty[i])**2
-            
+        # Interpolate to get predicted flux at midpoint of bin points.
+        yhat = jnp.interp(bin_midpoints, RIGIDITY_VALS, yhat)
+        yhat = untransform_output(yhat.reshape((1,-1))).reshape(-1) # Undo scaling and minmax.
+        
+        # Compute log prob
+        chi2 = (((yhat - observed)/uncertainty)**2).sum()
         log_prob = -chi2/2.  - nlogprior
         return log_prob
+
+
+        # batch = _form_batch(xs, parameters_specified_transformed)
+        # yhat = nn_predict(batch)
+        # yhat = yhat[0,:]  # Remove batch dimension.
+        
+        # # Interpolate to get predicted flux at both lattice and bin points.
+        # predicted = jnp.interp(bin_midpoints, RIGIDITY_VALS, yhat)
+        # chi2 = (((predicted - observed)/uncertainty)**2).sum()
+        # log_prob = -chi2/2.  - nlogprior
+        # return log_prob
+    
+        # # Interpolate to get predicted flux at both lattice and bin points.
+        # yloc = jnp.interp(xloc, RIGIDITY_VALS, yhat) 
+        # nbins = len(iloc)-1
+        # # Integrate over bin regions, and compare to observed to get likelihood.
+        # chi2 = 0.0
+        # for i in range(nbins):
+        #     # Integrate over bin by trapezoid method.
+        #     istart, istop = iloc[i], iloc[i+1]
+        #     area = jnp.trapz(y=yloc[istart:(istop+1)], x=xloc[istart:(istop+1)])
+        #     length = (xloc[istop] - xloc[istart])
+        #     predicted = area / length
+        #     # Use equation provided by Claudio for likelihood of bin.
+        #     chi2 += ((predicted - observed[i])/uncertainty[i])**2
+            
+        # log_prob = -chi2/2.  - nlogprior
+        # return log_prob
 
     return target_log_prob
 

@@ -91,7 +91,7 @@ if DEBUG:
     num_leapfrog_steps = 100
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
 else:
-    num_results = 105000 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
+    num_results = 110000 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
     num_burnin_steps = 1000 #500
     num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
     target_accept_prob = 0.3
@@ -153,8 +153,8 @@ samples = utils.untransform_input(samples_transformed)
 # Save results: samples and plots
 np.savetxt(fname=f'{results_dir}/samples_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=samples, delimiter=',')
 np.savetxt(fname=f'{results_dir}/logprobs_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=log_probs, delimiter=',')
-np.savetxt(fname=f'{results_dir}/logacceptratio_{SLURM_ARRAY_TASK_ID}.csv', X=log_accept_ratio, delimiter=',')
-np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_sizes, delimiter=',')
+#np.savetxt(fname=f'{results_dir}/logacceptratio_{SLURM_ARRAY_TASK_ID}.csv', X=log_accept_ratio, delimiter=',')
+#np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_sizes, delimiter=',')
 
 # Get NN predictions on these samples.
 from preprocess import transform_input, untransform_input
