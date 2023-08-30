@@ -16,14 +16,14 @@
 ##SBATCH --output=job.out
 #SBATCH --output=logs/job-%A_%a.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
 #SBATCH --mail-type=END,FAIL
-#SBATCH --mail-user=psadow@hawaii.edu
+#SBATCH --mail-user=linneamw@hawaii.edu
 
 echo This is job $SLURM_ARRAY_JOB_ID task $SLURM_ARRAY_TASK_ID running on $HOSTNAME
 echo $(date +%F-%H-%M-%S)
 
 # Load python profile, then call python script passing SLURM_ARRAY_TASK_ID as an argument.
 source ~/profiles/auto.profile
-conda activate gcr3
+conda activate gcr
 
 # UPDATE ME
 #'AMS02_H-PRL2021' # 'AMS02_H-PRL2018', 'AMS02_H-PRL2021', 'PAMELA_H-ApJ2013', 'PAMELA_H-ApJL2018'

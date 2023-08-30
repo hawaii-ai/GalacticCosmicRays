@@ -1,6 +1,7 @@
 """
 Distributed HMC
 Author: Peter July 2023
+Edited by Linnea August 2023
 
 Originally inspired by this example:
 https://colab.research.google.com/github/tensorflow/probability/blob/master/spinoffs/oryx/examples/notebooks/probabilistic_programming.ipynb#scrollTo=nmjmxzGhN855
@@ -8,8 +9,8 @@ https://colab.research.google.com/github/tensorflow/probability/blob/master/spin
 # New Requirements:
 # conda install python=3.9 numpy scipy pandas matplotlib
 # conda install -c anaconda cudatoolkit
-# pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-# pip install jax pip tensorflow-probability 
+# pip install --upgrade "jax[cuda12_local]==0.4.13" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# pip install jax pip tensorflow-probability
 # pip install matplotlib
 
 """
@@ -17,7 +18,7 @@ import os
 os.environ["KERAS_BACKEND"] = "jax"  # Must be specified before loading keras_core
 os.environ["JAX_PLATFORM_NAME"] = "cpu"  # CPU is faster for batchsize=1 inference.
 
-import keras_core as keras
+import keras_core as kerasjk
 import jax
 import jax.numpy as jnp
 from jax import random, vmap, jit, grad
@@ -103,6 +104,8 @@ else:
 def run_chain(key, state):
     #kernel = tfp.mcmc.HamiltonianMonteCarlo(target_log_prob, step_size=step_size, num_leapfrog_steps=num_leapfrog_steps)
     max_energy_diff = 1000 #1e32 #1e21 # Default 1000.0. Divergent samples are those that exceed this.
+
+    # Define kernel for mcmc to be the No U-Turn Sampler
     kernel = tfp.mcmc.NoUTurnSampler(target_log_prob, step_size=step_size, max_tree_depth=max_tree_depth, 
                                      max_energy_diff=max_energy_diff, unrolled_leapfrog_steps=1,)
     def trace_fn(_, pkr):
@@ -110,6 +113,7 @@ def run_chain(key, state):
                 pkr.target_log_prob,
                 pkr.step_size]
     
+    # Adjust step size of mcmc kernel to have noisy steps
     kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(
         kernel,
         num_adaptation_steps=int(num_burnin_steps * 0.8),
@@ -122,6 +126,7 @@ def run_chain(key, state):
                 pkr.inner_results.target_log_prob,
                 pkr.inner_results.step_size]
     
+    # Run the mcmc chain
     samples, pkr = tfp.mcmc.sample_chain(
         num_results=num_results,
         num_burnin_steps=num_burnin_steps,
@@ -160,7 +165,7 @@ np.savetxt(fname=f'{results_dir}/logprobs_{SLURM_ARRAY_TASK_ID}_{df.experiment_n
 from preprocess import transform_input, untransform_input
 specified_parameters_transformed = transform_input(jnp.array(specified_parameters).reshape((1,-1)))
 xs = utils._form_batch(samples_transformed, specified_parameters_transformed)
-model = keras.models.load_model(model_path)
+model = kerasjk.models.load_model(model_path)
 predictions_transformed = model.predict(xs, verbose=2)
 predictions = utils.untransform_output(predictions_transformed)
 np.savetxt(fname=f'{results_dir}/predictions_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=predictions, delimiter=',')
