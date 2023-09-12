@@ -67,16 +67,17 @@ print(f'Found {df.shape[0]} combinations to run MCMC on. Performing MCMC on inde
 df = df.iloc[SLURM_ARRAY_TASK_ID]
 
 # Model specification
-version = 'v1.0'
+model_version = 'v2.0'
+hmc_version = 'v6.0'
 
 # Setup  output directory.
-results_dir = f'../../results/{version}/'
+results_dir = f'../../results/{hmc_version}/'
 Path(results_dir).mkdir(parents=True, exist_ok=True)
 
 # Load observation data and define logprob. 
 specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval)
 data_path = f'../data/oct2022/{df.experiment_name}/{df.experiment_name}_{df.interval}.dat'  # This data is the same.
-model_path = f'../models/model_{version}_{df.polarity}.keras'
+model_path = f'../models/model_{model_version}_{df.polarity}.keras'
 seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
 penalty = 1e6
 target_log_prob = utils.define_log_prob(model_path, data_path, specified_parameters, penalty=penalty)
@@ -92,12 +93,13 @@ if DEBUG:
     num_leapfrog_steps = 100
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
 else:
-    num_results = 110000 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
-    num_burnin_steps = 1000 #500
+    num_results = 1_000_000 #1_000_000 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
+    num_steps_between_results = 0 # Thinning
+    num_burnin_steps = 50_000 #2500 #500
     num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
-    target_accept_prob = 0.3
+    target_accept_prob = 0.8 #0.3
     step_size = 1e-3 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves. 1e-4 0.0 acc.
-    num_leapfrog_steps = 100
+    num_leapfrog_steps = 100 #100
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
 
 @jit
