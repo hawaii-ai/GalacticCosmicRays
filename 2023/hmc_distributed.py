@@ -68,7 +68,7 @@ df = df.iloc[SLURM_ARRAY_TASK_ID]
 
 # Model specification
 model_version = 'v2.0'
-hmc_version = 'v6.0'
+hmc_version = 'v10.0'
 
 # Setup  output directory.
 results_dir = f'../../results/{hmc_version}/'
@@ -88,28 +88,23 @@ if DEBUG:
     num_results = 500 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
     num_burnin_steps = 100 #500
     num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
-    target_accept_prob = 0.3
     step_size = 1e-3 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves. 1e-4 0.0 acc.
-    num_leapfrog_steps = 100
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
 else:
-    num_results = 1_000_000 #1_000_000 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
-    num_steps_between_results = 0 # Thinning
-    num_burnin_steps = 50_000 #2500 #500
+    num_results = 110_000 #1_000_000 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
+    num_steps_between_results = 10 # Thinning
+    num_burnin_steps = 100_000 #2500 #500
     num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
-    target_accept_prob = 0.8 #0.3
-    step_size = 1e-3 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves. 1e-4 0.0 acc.
-    num_leapfrog_steps = 100 #100
+    step_size = 1e-1 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves. 1e-4 0.0 acc.
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
+    max_energy_diff = 1000 #1e32 #1e21 # Default 1000.0. Divergent samples are those that exceed this.
+    unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
 
 @jit
 def run_chain(key, state):
-    #kernel = tfp.mcmc.HamiltonianMonteCarlo(target_log_prob, step_size=step_size, num_leapfrog_steps=num_leapfrog_steps)
-    max_energy_diff = 1000 #1e32 #1e21 # Default 1000.0. Divergent samples are those that exceed this.
-
     # Define kernel for mcmc to be the No U-Turn Sampler
     kernel = tfp.mcmc.NoUTurnSampler(target_log_prob, step_size=step_size, max_tree_depth=max_tree_depth, 
-                                     max_energy_diff=max_energy_diff, unrolled_leapfrog_steps=1,)
+                                     max_energy_diff=max_energy_diff, unrolled_leapfrog_steps=unrolled_leapfrog_steps)
     def trace_fn(_, pkr):
         return [pkr.log_accept_ratio,
                 pkr.target_log_prob,
@@ -132,6 +127,7 @@ def run_chain(key, state):
     samples, pkr = tfp.mcmc.sample_chain(
         num_results=num_results,
         num_burnin_steps=num_burnin_steps,
+        num_steps_between_results=num_steps_between_results,
         kernel=kernel,
         trace_fn=trace_fn,
         current_state=state,
@@ -142,7 +138,7 @@ def run_chain(key, state):
 
 start_time = time.time()
 np.random.seed(seed)
-state = np.random.random((5,)) #jnp.random.random((5,), dtype='float32') # used for 29091984
+state = np.random.random((5,)) # used for 29091984
 #state = jnp.array(utils.minmax_scale_input(np.array([90, .5, 1.7, 1.4, 1.1 ]))) # This is ~MLE
 #state = 0.5 * jnp.ones((5,), dtype='float32')
 key = random.PRNGKey(seed)
@@ -160,11 +156,11 @@ samples = utils.untransform_input(samples_transformed)
 # Save results: samples and plots
 np.savetxt(fname=f'{results_dir}/samples_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=samples, delimiter=',')
 np.savetxt(fname=f'{results_dir}/logprobs_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=log_probs, delimiter=',')
-#np.savetxt(fname=f'{results_dir}/logacceptratio_{SLURM_ARRAY_TASK_ID}.csv', X=log_accept_ratio, delimiter=',')
-#np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_sizes, delimiter=',')
+np.savetxt(fname=f'{results_dir}/logacceptratio_{SLURM_ARRAY_TASK_ID}.csv', X=log_accept_ratio, delimiter=',')
+np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_sizes, delimiter=',')
 
 # Get NN predictions on these samples.
-from preprocess import transform_input, untransform_input
+from preprocess.preprocess import transform_input, untransform_input
 specified_parameters_transformed = transform_input(jnp.array(specified_parameters).reshape((1,-1)))
 xs = utils._form_batch(samples_transformed, specified_parameters_transformed)
 model = kerasjk.models.load_model(model_path)

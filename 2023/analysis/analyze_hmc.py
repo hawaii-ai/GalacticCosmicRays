@@ -1,3 +1,5 @@
+import sys
+sys.path.append('../')
 import utils
 import numpy as np
 import pandas as pd
@@ -10,7 +12,7 @@ def index_mcmc_runs():
     experiments = ['AMS02_H-PRL2021', 'PAMELA_H-ApJ2013', 'PAMELA_H-ApJL2018']
     dfs = []
     for experiment_name in experiments:
-        filename = f'../data/2023/{experiment_name}_heliosphere.dat'
+        filename = f'../../data/2023/{experiment_name}_heliosphere.dat'
         df = utils.index_experiment_files(filename) 
         df['experiment_name'] = experiment_name
         df['filename_heliosphere'] = filename
@@ -22,17 +24,16 @@ def index_mcmc_runs():
 df = index_mcmc_runs()  # List of all 210 experiments.
 
 # Model specification
-version = 'v1.0'
-reduce_by = 1 # 9 for v2.0/v5.0, 1 for v3.0/v4.0
+version = 'v8.0'
+reduce_by = 1 # 9 for v2.0/v5.0, 1 for v1.0/v3.0/v4.0/v7.0/v8.0, 30 for v6.0
 
 # Setup  output directory.
-# results_dir = f'../../results/{version}/'
-results_dir = f'../../results/2023_07_12/{version}/'
+results_dir = f'../../../results/{version}/'
 figs_dir = f'{results_dir}figs/'
 Path(figs_dir).mkdir(parents=True, exist_ok=True)
 
 # Load samples, logprobs, and predictions to each respective index in the dataframe
-for i in range(len(df)):
+for i in range(0, len(df)):
     experiment_name = df["experiment_name"].iloc[i]
     interval = df.interval.iloc[i]
     polarity = df.polarity.iloc[i]

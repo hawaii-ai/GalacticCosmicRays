@@ -17,10 +17,10 @@ from jax import random, vmap, jit, grad
 #assert jax.default_backend() == 'gpu'
 import keras_core as keras
 
-import preprocess
-from preprocess import INPUTS, PARAMETERS, PARAMETERS_SPECIFIED, RIGIDITY_VALS
-from preprocess import transform_input, untransform_input
-from preprocess import PARAMETERS_MIN, PARAMETERS_MAX
+import preprocess.preprocess
+from preprocess.preprocess import INPUTS, PARAMETERS, PARAMETERS_SPECIFIED, RIGIDITY_VALS
+from preprocess.preprocess import transform_input, untransform_input
+from preprocess.preprocess import PARAMETERS_MIN, PARAMETERS_MAX
 
 
 def read_experiment_summary(filename) -> pd.DataFrame:
@@ -189,9 +189,9 @@ def untransform_output(yhat):
     """
     NN is trained on transformed data. 
     Rigidity measurments were transformed at log(x)/Y_LOG_MAX.
-    See preprocess.py
+    See preprocess.preprocess.py
     """
-    yhat = yhat * preprocess.Y_LOG_MAX # Undo max scaling.
+    yhat = yhat * preprocess.preprocess.Y_LOG_MAX # Undo max scaling.
     yhat = jnp.exp(yhat) # Undo log transform of target output.
     return yhat
 

@@ -25,7 +25,5 @@ wheels/
 .installed.cfg
 *.egg
 
-# Tensorboard and slurm log files
-tensorboard_logs/
+# Slurm log files
 2023/logs/
-
