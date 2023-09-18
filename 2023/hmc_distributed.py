@@ -68,11 +68,12 @@ df = df.iloc[SLURM_ARRAY_TASK_ID]
 
 # Model specification
 model_version = 'v2.0'
-hmc_version = 'v10.0'
+hmc_version = 'v12.0'
 
 # Setup  output directory.
 results_dir = f'../../results/{hmc_version}/'
 Path(results_dir).mkdir(parents=True, exist_ok=True)
+print(f'Running HMC version {hmc_version} on model version {model_version}. The results will be saved in {results_dir}.')
 
 # Load observation data and define logprob. 
 specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval)
@@ -92,10 +93,10 @@ if DEBUG:
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
 else:
     num_results = 110_000 #1_000_000 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
-    num_steps_between_results = 10 # Thinning
+    num_steps_between_results = 40 # Thinning
     num_burnin_steps = 100_000 #2500 #500
     num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
-    step_size = 1e-1 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves. 1e-4 0.0 acc.
+    step_size = 1e-4 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves. 1e-4 0.0 acc.
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
     max_energy_diff = 1000 #1e32 #1e21 # Default 1000.0. Divergent samples are those that exceed this.
     unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
