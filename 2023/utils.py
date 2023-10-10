@@ -193,6 +193,7 @@ def untransform_output(yhat):
     """
     yhat = yhat * preprocess.preprocess.Y_LOG_MAX # Undo max scaling.
     yhat = jnp.exp(yhat) # Undo log transform of target output.
+    # yhat = np.exp(yhat) # Uncomment if getting jax errors
     return yhat
 
 

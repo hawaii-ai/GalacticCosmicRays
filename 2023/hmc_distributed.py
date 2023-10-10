@@ -67,8 +67,8 @@ print(f'Found {df.shape[0]} combinations to run MCMC on. Performing MCMC on inde
 df = df.iloc[SLURM_ARRAY_TASK_ID]
 
 # Model specification
-model_version = 'v2.0'
-hmc_version = 'v12.0'
+model_version = 'v3.0'
+hmc_version = 'v13.0'
 
 # Setup  output directory.
 results_dir = f'../../results/{hmc_version}/'

@@ -157,8 +157,10 @@ def make_preprocessed_file(infile, outfile):
         assert (X_MAX == x_max).all()
         assert (X_RANGE == x_range).all()
 
-        # We don't need to do logp1 since we have reasonable values. 
+        # Comment out for select_quality=False, Y has nan values
         assert np.min(Y, axis=0).min() > 1e-6, np.min(Y, axis=0)
+
+        # We don't need to do logp1 since we have reasonable values. 
         #Y_logp1 = np.log(Y+1.)
         #Y_logp1_MAX = np.max(Y_logp1) # Y_MAX = 8.268953
         # Y_logp1_scaled = Y_logp1 / Y_logp1_MAX # Min should already be 0, and we want to emphasize the larger vals.
@@ -166,6 +168,8 @@ def make_preprocessed_file(infile, outfile):
         # dset = dest.create_dataset("Y_logp1", data=Y_logp1)
         # dset = dest.create_dataset("Y_logp1_scaled", data=Y_logp1_scaled)
         # dset.attrs['Y_logp1_MAX'] = Y_logp1_MAX
+
+        # Comment below out for select_quality=False, Y has nan values
         Y_log = np.log(Y)
         Y_log_scaled = Y_log / Y_LOG_MAX
         dset = dest.create_dataset("Y_log_scaled", data=Y_log_scaled)

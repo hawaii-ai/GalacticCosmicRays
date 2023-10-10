@@ -11,8 +11,8 @@
 #SBATCH --mem=12gb ## max amount of memory per node you require
 #SBATCH --time=00-12:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared
 
-#SBATCH --job-name=analyze_hmc
-#SBATCH --output=../logs/analysis-%A.out
+#SBATCH --job-name=train_nn
+#SBATCH --output=./logs/analysis-%A.out
 #SBATCH --mail-type=END,FAIL
 #SBATCH --mail-user=linneamw@hawaii.edu
 
@@ -20,4 +20,5 @@
 source ~/profiles/auto.profile
 conda activate gcr
 
-python analyze_hmc.py
+jupyter nbconvert train_nn.ipynb --to python
+python train_nn.py

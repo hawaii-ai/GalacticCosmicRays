@@ -24,7 +24,7 @@ def index_mcmc_runs():
 df = index_mcmc_runs()  # List of all 210 experiments.
 
 # Model specification
-version = 'v10.0'
+version = 'v13.0'
 reduce_by = 1 # 9 for v2.0/v5.0, 1 for v1.0/v3.0/v4.0/v7.0/v8.0, 30 for v6.0
 
 # Setup  output directory.

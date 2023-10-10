@@ -27,3 +27,6 @@ wheels/
 
 # Slurm log files
 2023/logs/
+
+# Model predictions
+models/predictions*
