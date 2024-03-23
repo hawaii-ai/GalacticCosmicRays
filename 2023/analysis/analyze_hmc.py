@@ -24,8 +24,8 @@ def index_mcmc_runs():
 df = index_mcmc_runs()  # List of all 210 experiments.
 
 # Model specification
-version = 'v13.0'
-reduce_by = 1 # 9 for v2.0/v5.0, 1 for v1.0/v3.0/v4.0/v7.0/v8.0, 30 for v6.0
+version = 'v15.0'
+reduce_by = 1 # 9 for v2.0/v5.0, 30 for v6.0, 1 for all other versions
 
 # Setup  output directory.
 results_dir = f'../../../results/{version}/'
@@ -38,8 +38,18 @@ for i in range(0, len(df)):
     interval = df.interval.iloc[i]
     polarity = df.polarity.iloc[i]
 
+    # Check if a plot for this index exists; if so, skip
+    if Path(f'{figs_dir}{i}_{experiment_name}_{interval}_{polarity}.png').exists():
+        print(f"Sample number {i}: plot already exists. Skipping.")
+        continue
+
     filename = f'{results_dir}samples_{i}_{experiment_name}_{interval}_{polarity}.csv'
     print(f"Filename: {filename}")
+
+    # Check if file exists; if not, skip
+    if not Path(filename).exists():
+        print(f"Sample number {i}: file {filename} does not exist. Skipping.")
+        continue
 
     samples = np.loadtxt(filename, delimiter=',')
     # logprobs = np.loadtxt(f'{results_dir}logprobs_{i}_{experiment_name}_{interval}_{polarity}.csv', delimiter=',')

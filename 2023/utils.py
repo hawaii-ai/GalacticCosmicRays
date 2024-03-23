@@ -13,14 +13,28 @@ import pandas as pd
 
 import jax
 import jax.numpy as jnp
-from jax import random, vmap, jit, grad
 #assert jax.default_backend() == 'gpu'
+                
 import keras_core as keras
 
 import preprocess.preprocess
 from preprocess.preprocess import INPUTS, PARAMETERS, PARAMETERS_SPECIFIED, RIGIDITY_VALS
 from preprocess.preprocess import transform_input, untransform_input
 from preprocess.preprocess import PARAMETERS_MIN, PARAMETERS_MAX
+from chi2 import CalculateChi2
+
+def index_mcmc_runs():
+    """Make a list of combinations for which we want to run MCMC."""
+    experiments = ['AMS02_H-PRL2021', 'PAMELA_H-ApJ2013', 'PAMELA_H-ApJL2018']
+    dfs = []
+    for experiment_name in experiments:
+        filename = f'../data/2023/{experiment_name}_heliosphere.dat'
+        df = index_experiment_files(filename) 
+        df['experiment_name'] = experiment_name
+        df['filename_heliosphere'] = filename
+        dfs.append(df)
+    df = pd.concat(dfs, axis=0, ignore_index=0)
+    return df
 
 
 def read_experiment_summary(filename) -> pd.DataFrame:
@@ -56,7 +70,9 @@ def index_experiment_files(filename)->pd.DataFrame:
     dfpos = df[df.ending >= pd.to_datetime('October 1 2013')].copy(deep=True)
     dfpos['polarity'] = 'pos'
 
-    rval = pd.concat([dfneg, dfpos], axis=0, ignore_index=True)
+    # rval = pd.concat([dfneg, dfpos], axis=0, ignore_index=True)
+    rval = dfneg # Only fitting negative models for now.
+    
     return rval
 
 
@@ -86,12 +102,14 @@ def get_parameters(filename, interval: str = None, return_std=False):
     row = df.loc[df['interval'] == interval]
     alpha = row['alpha'].values[0]
     cmf = row['cmf'].values[0]
+    vspoles = 400.0 # row['vspoles'].values[0]
+
     if not return_std:
-        return row['alpha'].values[0], row['cmf'].values[0], row['vspoles'].values[0]
+        return alpha, cmf, vspoles
     else:
-        return (row['alpha'].values[0], 
-                row['cmf'].values[0], 
-                row['vspoles'].values[0],
+        return (alpha, 
+                cmf, 
+                vspoles,
                 row['alpha_std'].values[0], 
                 row['cmf_std'].values[0], 
                 row['vspoles_std'].values[0])
@@ -167,24 +185,6 @@ def remove_consecutive_duplicates(samples, aux=[], atol=0.0):
         return samples[~consecutive_repeat_rows, :], aux_return
 
 
-# def define_nn_pred(model_path, normalize_input_flag=False, untransform_output_flag=True, rebin_output_flag=False):
-#     # Load trained NN model that maps 7 parameters to predicted flux at rigidity vals range(245).
-#     model = keras.models.load_model(model_path)
-#     model.run_eagerly = True # Settable attribute. Required to be true for ppmodel.
-
-#     def f(x):
-#         # Make NN predictions on xs.
-#         if normalize_input_flag:
-#             x = minmax_scale_input(x)
-#         yhat = model.predict(x)
-#         if untransform_output_flag:
-#             yhat = untransform_output(yhat)
-#         if rebin_output_flag:
-#             yhat = rebin_output(yhat)
-#         return yhat
-#     return f
-
-
 def untransform_output(yhat):
     """
     NN is trained on transformed data. 
@@ -195,39 +195,6 @@ def untransform_output(yhat):
     yhat = jnp.exp(yhat) # Undo log transform of target output.
     # yhat = np.exp(yhat) # Uncomment if getting jax errors
     return yhat
-
-
-def rebin_output(yhat, data_path):
-    # Interpolate to get predicted flux at both lattice and bin points.
-    xloc, iloc, observed, uncertainty = load_preprocessed_data_ams(data_path)
-    yloc = jnp.interp(xloc, RIGIDITY_VALS, yhat) 
-    # Integrate over bin regions, and compare to observed to get likelihood.
-    nbins = len(iloc)-1
-    rebinned = np.zeros(nbins)
-    for i in range(nbins):
-        # Integrate over bin by trapezoid method.
-        istart, istop = iloc[i], iloc[i+1]
-        area = jnp.trapz(y=yloc[istart:(istop+1)], x=xloc[istart:(istop+1)])
-        length = (xloc[istop] - xloc[istart])
-        rebinned[i] = area / length
-    return rebinned
-
-
-def calc_loglikelihood(yhat, data_path):
-    # Interpolate to get predicted flux at both lattice and bin points.
-    xloc, iloc, observed, uncertainty = load_preprocessed_data_ams(data_path)
-    yloc = jnp.interp(xloc, RIGIDITY_VALS, yhat) 
-    chi2 = 0.0
-    nbins = len(iloc)-1
-    for i in range(nbins):
-        # Integrate over bin by trapezoid method.
-        istart, istop = iloc[i], iloc[i+1]
-        area = jnp.trapz(y=yloc[istart:(istop+1)], x=xloc[istart:(istop+1)])
-        length = (xloc[istop] - xloc[istart])
-        predicted = area / length
-        # Use equation provided by Claudio for likelihood of bin.
-        chi2 += ((predicted - observed[i])/uncertainty[i])**2
-    return -chi2/2
 
 
 def remove_outliers(samples,  min_bound=PARAMETERS_MIN, max_bound=PARAMETERS_MAX, buffer=0):
@@ -242,22 +209,25 @@ def remove_outliers(samples,  min_bound=PARAMETERS_MIN, max_bound=PARAMETERS_MAX
 
 def _form_batch(params_trans, params_spec_trans):
     """
-    Create jnp batch from sets of ordered features.
+    Create np batch from sets of ordered features.
     These should already be transformed.
     Output is fed to NN. Might want to clean this up since we are using it for two purposes.
     Args:
         params_trans: jnp array with dimension 1
-        params_spec_trans: tuple 
+        params_spec_trans: tuple
     Output:
-        xs = njp array with dimensions (batch=1, -1)
+        xs = np array with dimensions (batch=1, -1)
     """
     if type(params_spec_trans) == tuple:
         # this is the case during HMC
         alpha, cmf, vspoles = params_spec_trans  # Should only have three.
         assert params_trans.ndim==1, params_trans.ndim
+
+        # Put xs in order NN expects: ['alpha', 'cmf', 'cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr', 'vspoles']
         xs = jnp.concatenate([jnp.array([alpha, cmf]), params_trans, jnp.array([vspoles])])
         # Assumes we are doing on example at a time, as in MCMC
         xs = jnp.reshape(xs, (1,8)) # Added because Jax was throwing shape error. Need batch dimension.
+
     else: # elif isinstance(params_spec_trans, type(jnp.array([])))
         # This is used after the MCMC to get nn predictions on the samples. Can handle batches.
         if params_trans.ndim==1:
@@ -265,39 +235,37 @@ def _form_batch(params_trans, params_spec_trans):
         if params_spec_trans.ndim==1:
             # Need to reshape into example by feature matrix.
             params_spec_trans = params_spec_trans.reshape((1,-1))
+            
         broadcasted_spec = params_spec_trans.repeat(params_trans.shape[0], axis=0)
         xs = jnp.concatenate([broadcasted_spec[:,0:2], params_trans, broadcasted_spec[:,2:3]], axis=1)
     # else:
     #     raise Exception()
     return xs
 
+def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9, integrate=False, par_equals_perr=False):
+    """
+    Calculate the logliklihood of hmc parameters given the data.
 
-def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9):
-    """
     Args:
-        model_path: filename of model
+        model_path: filename of NN model
         data_path: filename of experimental data for interval, e.g. path/AMS02_H-PRL2018_20110520-20110610.dat
-        parameters_specified: tuple of alpha, cmf, vspoles.
+        parameters_specified: tuple of alpha, cmf, vspoles (parameters not sampled by hmc)
         penalty = scalar to punish drifting outside zone of interest. 
+        integrate: If True, integrate over bin regions. Otherwise, interpolate flux at the geoemtric mean of the bin.
+        par_equals_perr: If True, then perr = par, and the MCMC only samples 3 parameters.
     """
-    # Load trained NN model that maps 7 parameters to predicted flux at RIGIDITY_VALS.
+
+    # Load trained NN model that maps 8 parameters to predicted flux at RIGIDITY_VALS.
     model = keras.models.load_model(model_path)
     model.run_eagerly = True # Settable attribute (in elegy). Required to be true for ppmodel.
 
     # Load observation data from Claudio
-    #xloc, iloc, observed, uncertainty = load_preprocessed_data_ams(data_path) # Replaced with bin midpoints
     bins, observed, uncertainty = load_data_ams(data_path)
-    #bin_midpoints = (bins[:-1] + bins[1:])/2  # Arithmetic 
+    #bin_midpoints = (bins[:-1] + bins[1:])/2  # Arithmetic mean
     bin_midpoints = (bins[:-1] * bins[1:]) ** 0.5  # Geometric mean seemed to work better in exp.
+
+    # Transform input parameters to be in range 0--1.
     parameters_specified_transformed = transform_input(jnp.array(parameters_specified))
-    
-    # def nn_predict(x):
-    #     """
-    #     Predict fluxes (untransformed) from transformed input. 
-    #     """
-    #     yhat = model(x)    
-    #     yhat = untransform_output(yhat) # Undo scaling and minmax.
-    #     return yhat
 
     def target_log_prob(xs):
         """
@@ -307,52 +275,46 @@ def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9):
         Returns:
             log_prob: Scalar valued log probability
         """
+
+        # If par==perr, then only predicting ['cpa', 'pwr1par', 'pwr2par']. Need to create array of ['cpa', 'pwr1par', 'pwr1par', 'pwr2par', 'pwr2par']
+        if par_equals_perr:
+            xs = jnp.array([xs[0], xs[1], xs[1], xs[2], xs[2]])
+
         # Include logprior in loglikelihood. This keeps HMC from going off into no-mans land.
         nlogprior = 0.
         for i in range(5):
             nlogprior += penalty * jnp.abs((jnp.minimum(0., xs[i]))) # Penalty for being <0
             nlogprior += penalty * jnp.abs((jnp.maximum(1., xs[i]) - 1.))  # Penalty for being >1
 
+        # Batch parameters and predict with model
         batch = _form_batch(xs, parameters_specified_transformed)
         yhat = model(batch)    
         yhat = yhat[0,:]  # Remove batch dimension.
-        
-        # Interpolate to get predicted flux at midpoint of bin points.
-        yhat = jnp.interp(bin_midpoints, RIGIDITY_VALS, yhat)
+
+        # Prepare yhat and rigidity for integration/interpolation
         yhat = untransform_output(yhat.reshape((1,-1))).reshape(-1) # Undo scaling and minmax.
+        log_yhat = jnp.log(yhat)
+        log_rigidity = jnp.log(jnp.array(RIGIDITY_VALS))
+
+        # Compute chi2
+        chi2 = CalculateChi2(log_rigidity, log_yhat)
+        yhat_interp_integrated = []
+
+        if integrate:
+            # Compute integral for each bin
+            for x1, x2 in zip(bins[:-1], bins[1:]):
+                integral = chi2.compute_integral(x1, x2) / (x2 - x1)
+                yhat_interp_integrated.append(integral)
+        else:
+            # Compute interpolated value for each bin
+            for x in bin_midpoints:
+                interpolated = chi2.interpolate_model(x)
+                yhat_interp_integrated.append(interpolated)
         
         # Compute log prob
-        chi2 = (((yhat - observed)/uncertainty)**2).sum()
+        chi2 = (((jnp.asarray(yhat_interp_integrated) - observed)/uncertainty)**2).sum()
         log_prob = -chi2/2.  - nlogprior
         return log_prob
-
-
-        # batch = _form_batch(xs, parameters_specified_transformed)
-        # yhat = nn_predict(batch)
-        # yhat = yhat[0,:]  # Remove batch dimension.
-        
-        # # Interpolate to get predicted flux at both lattice and bin points.
-        # predicted = jnp.interp(bin_midpoints, RIGIDITY_VALS, yhat)
-        # chi2 = (((predicted - observed)/uncertainty)**2).sum()
-        # log_prob = -chi2/2.  - nlogprior
-        # return log_prob
-    
-        # # Interpolate to get predicted flux at both lattice and bin points.
-        # yloc = jnp.interp(xloc, RIGIDITY_VALS, yhat) 
-        # nbins = len(iloc)-1
-        # # Integrate over bin regions, and compare to observed to get likelihood.
-        # chi2 = 0.0
-        # for i in range(nbins):
-        #     # Integrate over bin by trapezoid method.
-        #     istart, istop = iloc[i], iloc[i+1]
-        #     area = jnp.trapz(y=yloc[istart:(istop+1)], x=xloc[istart:(istop+1)])
-        #     length = (xloc[istop] - xloc[istart])
-        #     predicted = area / length
-        #     # Use equation provided by Claudio for likelihood of bin.
-        #     chi2 += ((predicted - observed[i])/uncertainty[i])**2
-            
-        # log_prob = -chi2/2.  - nlogprior
-        # return log_prob
 
     return target_log_prob
 

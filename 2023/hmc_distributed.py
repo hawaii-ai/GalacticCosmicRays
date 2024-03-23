@@ -46,29 +46,15 @@ except:
     SLURM_ARRAY_TASK_ID = 0
     SLURM_ARRAY_JOB_ID = 0
     DEBUG = True
-    
-
-def index_mcmc_runs():
-    """Make a list of combinations for which we want to run MCMC."""
-    experiments = ['AMS02_H-PRL2021', 'PAMELA_H-ApJ2013', 'PAMELA_H-ApJL2018']
-    dfs = []
-    for experiment_name in experiments:
-        filename = f'../data/2023/{experiment_name}_heliosphere.dat'
-        df = utils.index_experiment_files(filename) 
-        df['experiment_name'] = experiment_name
-        df['filename_heliosphere'] = filename
-        dfs.append(df)
-    df = pd.concat(dfs, axis=0, ignore_index=0)
-    return df
 
 # Select experiment parameters
-df = index_mcmc_runs()  # List of all ~200 experiments.
+df = utils.index_mcmc_runs()  # List of all experiments (0-209)
 print(f'Found {df.shape[0]} combinations to run MCMC on. Performing MCMC on index {SLURM_ARRAY_TASK_ID}.')
 df = df.iloc[SLURM_ARRAY_TASK_ID]
 
 # Model specification
-model_version = 'v3.0'
-hmc_version = 'v14.0'
+model_version = 'v3.0' # v2.0 is MSE NN, v3.0 is MAE 
+hmc_version = 'v19.0'
 
 # Setup  output directory.
 results_dir = f'../../results/{hmc_version}/'
@@ -81,24 +67,36 @@ data_path = f'../data/oct2022/{df.experiment_name}/{df.experiment_name}_{df.inte
 model_path = f'../models/model_{model_version}_{df.polarity}.keras'
 seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
 penalty = 1e6
-target_log_prob = utils.define_log_prob(model_path, data_path, specified_parameters, penalty=penalty)
+integrate = False # If False, Chi2 is interpolated. If True, Chi2 is integrated.
+par_equals_perr = True # If True, only 3 parameters will be sampled by the HMC and pwr1par==pwr1perr and pwr2par==pwr2perr
+
+# Number of parameters for HMC to sample. 5 normally, 3 if par_equals_perr=True
+if par_equals_perr:
+    num_params = 3
+else:
+    num_params = 5
+
+target_log_prob = utils.define_log_prob(model_path, data_path, specified_parameters, penalty=penalty, integrate=integrate, par_equals_perr=par_equals_perr)
 
 # Hyperparameters for MCMC
 if DEBUG:
     # For running interactive tests.
-    num_results = 500 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
+    num_results = 100 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
+    num_steps_between_results = 0 # Thinning
     num_burnin_steps = 100 #500
     num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
     step_size = 1e-3 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves. 1e-4 0.0 acc.
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
+    max_energy_diff = 1000 #1e32 #1e21 # Default 1000.0. Divergent samples are those that exceed this.
+    unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
 else:
     num_results = 110_000 #1_000_000 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
     num_steps_between_results = 100 # Thinning
-    num_burnin_steps = 100_000 #2500 #500
+    num_burnin_steps = 100_000 # Number of steps before beginning sampling
     num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
-    step_size = 1e-4 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves. 1e-4 0.0 acc.
+    step_size = 1e-4 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
-    max_energy_diff = 1000 #1e32 #1e21 # Default 1000.0. Divergent samples are those that exceed this.
+    max_energy_diff = 1000 # Default 1000.0. Divergent samples are those that exceed this.
     unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
 
 @jit
@@ -132,16 +130,17 @@ def run_chain(key, state):
         kernel=kernel,
         trace_fn=trace_fn,
         current_state=state,
-        seed=key)
+        seed=key
+        )
     
     return samples, pkr
 
 
 start_time = time.time()
 np.random.seed(seed)
-state = np.random.random((5,)) # used for 29091984
-#state = jnp.array(utils.minmax_scale_input(np.array([90, .5, 1.7, 1.4, 1.1 ]))) # This is ~MLE
-#state = 0.5 * jnp.ones((5,), dtype='float32')
+state = np.random.random((num_params,)) # used for 29091984
+#state = np.array(utils.minmax_scale_input(np.array([90, .5, 1.7, 1.4, 1.1 ]))) # This is ~MLE
+#state = 0.5 * np.ones((5,), dtype='float32')
 key = random.PRNGKey(seed)
 samples_transformed_all, pkr_all = run_chain(key, state)
 # Remove duplicates.
@@ -162,7 +161,19 @@ np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_si
 
 # Get NN predictions on these samples.
 from preprocess.preprocess import transform_input, untransform_input
-specified_parameters_transformed = transform_input(jnp.array(specified_parameters).reshape((1,-1)))
+specified_parameters_transformed = transform_input(np.array(specified_parameters).reshape((1,-1)))
+
+# If par==perr, then only predicting ['cpa', 'pwr1par', 'pwr2par']. Need to create array of ['cpa', 'pwr1par', 'pwr1par', 'pwr2par', 'pwr2par']
+# Need to adjust every row in samples to be [cpa, pwr1par, pwr1par, pwr2par, pwr2par] where pwr1par==pwr1perr and pwr2par==pwr2perr
+if par_equals_perr:
+    expanded_samples = np.zeros((samples_transformed.shape[0], 5))
+    expanded_samples = np.column_stack((samples_transformed[:, 0], 
+                                    samples_transformed[:, 1], 
+                                    samples_transformed[:, 1], 
+                                    samples_transformed[:, 2], 
+                                    samples_transformed[:, 2]))
+    samples_transformed = expanded_samples
+
 xs = utils._form_batch(samples_transformed, specified_parameters_transformed)
 model = kerasjk.models.load_model(model_path)
 predictions_transformed = model.predict(xs, verbose=2)
