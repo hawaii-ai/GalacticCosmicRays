@@ -54,7 +54,7 @@ df = df.iloc[SLURM_ARRAY_TASK_ID]
 
 # Model specification
 model_version = 'v3.0' # v2.0 is MSE NN, v3.0 is MAE 
-hmc_version = 'v19.0'
+hmc_version = 'v20.0'
 
 # Setup  output directory.
 results_dir = f'../../results/{hmc_version}/'

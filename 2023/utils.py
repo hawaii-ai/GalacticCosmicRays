@@ -102,7 +102,7 @@ def get_parameters(filename, interval: str = None, return_std=False):
     row = df.loc[df['interval'] == interval]
     alpha = row['alpha'].values[0]
     cmf = row['cmf'].values[0]
-    vspoles = 400.0 # row['vspoles'].values[0]
+    vspoles = 400.0 # row['vspoles'].values[0] 
 
     if not return_std:
         return alpha, cmf, vspoles
@@ -235,7 +235,7 @@ def _form_batch(params_trans, params_spec_trans):
         if params_spec_trans.ndim==1:
             # Need to reshape into example by feature matrix.
             params_spec_trans = params_spec_trans.reshape((1,-1))
-            
+
         broadcasted_spec = params_spec_trans.repeat(params_trans.shape[0], axis=0)
         xs = jnp.concatenate([broadcasted_spec[:,0:2], params_trans, broadcasted_spec[:,2:3]], axis=1)
     # else:
