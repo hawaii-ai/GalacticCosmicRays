@@ -102,7 +102,7 @@ def get_parameters(filename, interval: str = None, return_std=False):
     row = df.loc[df['interval'] == interval]
     alpha = row['alpha'].values[0]
     cmf = row['cmf'].values[0]
-    vspoles = 400.0 # row['vspoles'].values[0] 
+    vspoles = row['vspoles'].values[0] # 400.0
 
     if not return_std:
         return alpha, cmf, vspoles

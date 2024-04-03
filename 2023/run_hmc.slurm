@@ -13,7 +13,7 @@
 #SBATCH --mem=12000 ## max amount of memory per node you require
 #SBATCH --time=30-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on exclusive-long, 14day max on sadow, 30day max on koa
 
-#SBATCH --job-name=hmc_parequalsperr_vspoles400
+#SBATCH --job-name=hmc_parequalsperr
 #SBATCH --output=job.out
 #SBATCH --output=logs/job-%A_%a.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
 #SBATCH --mail-type=START,END,FAIL

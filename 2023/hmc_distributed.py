@@ -54,7 +54,7 @@ df = df.iloc[SLURM_ARRAY_TASK_ID]
 
 # Model specification
 model_version = 'v3.0' # v2.0 is MSE NN, v3.0 is MAE 
-hmc_version = 'v20.0'
+hmc_version = 'v19.0'
 
 # Setup  output directory.
 results_dir = f'../../results/{hmc_version}/'
@@ -150,6 +150,17 @@ log_accept_ratio, log_probs, step_sizes  = pkr
 print('Finished in %d minutes.' % int((time.time() - start_time)//60))
 print(f'Acceptance rate: {len(samples_transformed)/len(samples_transformed_all)}. Decrease step_size to increase rate.')
 
+# If par==perr, then only predicting ['cpa', 'pwr1par', 'pwr2par']. Need to create array of ['cpa', 'pwr1par', 'pwr1par', 'pwr2par', 'pwr2par']
+# Need to adjust every row in samples to be [cpa, pwr1par, pwr1par, pwr2par, pwr2par] where pwr1par==pwr1perr and pwr2par==pwr2perr
+if par_equals_perr:
+    expanded_samples = np.zeros((samples_transformed.shape[0], 5))
+    expanded_samples = np.column_stack((samples_transformed[:, 0], 
+                                    samples_transformed[:, 1], 
+                                    samples_transformed[:, 1], 
+                                    samples_transformed[:, 2], 
+                                    samples_transformed[:, 2]))
+    samples_transformed = expanded_samples
+
 # Inverse transform samples.
 samples = utils.untransform_input(samples_transformed)
 
@@ -162,17 +173,6 @@ np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_si
 # Get NN predictions on these samples.
 from preprocess.preprocess import transform_input, untransform_input
 specified_parameters_transformed = transform_input(np.array(specified_parameters).reshape((1,-1)))
-
-# If par==perr, then only predicting ['cpa', 'pwr1par', 'pwr2par']. Need to create array of ['cpa', 'pwr1par', 'pwr1par', 'pwr2par', 'pwr2par']
-# Need to adjust every row in samples to be [cpa, pwr1par, pwr1par, pwr2par, pwr2par] where pwr1par==pwr1perr and pwr2par==pwr2perr
-if par_equals_perr:
-    expanded_samples = np.zeros((samples_transformed.shape[0], 5))
-    expanded_samples = np.column_stack((samples_transformed[:, 0], 
-                                    samples_transformed[:, 1], 
-                                    samples_transformed[:, 1], 
-                                    samples_transformed[:, 2], 
-                                    samples_transformed[:, 2]))
-    samples_transformed = expanded_samples
 
 xs = utils._form_batch(samples_transformed, specified_parameters_transformed)
 model = kerasjk.models.load_model(model_path)
