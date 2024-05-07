@@ -7,7 +7,7 @@
 ##SBATCH --nodelist=gpu-0008
 
 #SBATCH --array=0-132 ## Negative intervals only
-##SBATCH --array=0-209
+##SBATCH --array=0-209 ## Negative and positive intervals
 ##BATCH --gres=gpu:1
 #SBATCH --cpus-per-task=3
 #SBATCH --mem=12000 ## max amount of memory per node you require

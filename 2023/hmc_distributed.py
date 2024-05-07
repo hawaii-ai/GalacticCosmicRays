@@ -92,9 +92,11 @@ if DEBUG:
     unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
 else:
     mcmc_or_hmc = 'mcmc' # 'mcmc' or 'hmc'
-    num_results = 110_000 #1_000_000 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
+    num_results = 1_000_000 #110_000 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
     num_steps_between_results = 100 # Thinning
     num_burnin_steps = 100_000 # Number of steps before beginning sampling
+    
+    # Note: below parameters are only for hmc
     num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
     step_size = 1e-4 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
@@ -112,18 +114,11 @@ def run_chain(key, state):
             name=None
         )
 
-        # RandomWalkMetropolis does not have a step_size in the pkr, so we can't use DualAveragingStepSizeAdaptation or initialize a trace_fn
-        # Run the mcmc chain
-        samples, pkr = tfp.mcmc.sample_chain(
-            num_results=num_results,
-            num_burnin_steps=num_burnin_steps,
-            num_steps_between_results=num_steps_between_results,
-            kernel=kernel,
-            trace_fn=None,
-            current_state=state,
-            seed=key
-            )
-
+        # MetropolisHastingsKernelResults doesn't have a step_size or target_log_prob attribute, 
+        # so we can't do DualAveragingStepSizeAdaptation or trace those values
+        def trace_fn(_, pkr):
+            return [pkr.log_accept_ratio]
+        
     else:
         # Kernel for HMC is NoUTurnSampler
         kernel = tfp.mcmc.NoUTurnSampler(
@@ -139,7 +134,7 @@ def run_chain(key, state):
             return [pkr.log_accept_ratio,
                     pkr.target_log_prob,
                     pkr.step_size]
-    
+
         # Adjust step size of mcmc kernel to have noisy steps
         kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(
             kernel,
@@ -155,33 +150,32 @@ def run_chain(key, state):
                     pkr.inner_results.target_log_prob,
                     pkr.inner_results.step_size]
     
-    
-        # Run the mcmc chain
-        samples, pkr = tfp.mcmc.sample_chain(
-            num_results=num_results,
-            num_burnin_steps=num_burnin_steps,
-            num_steps_between_results=num_steps_between_results,
-            kernel=kernel,
-            trace_fn=trace_fn,
-            current_state=state,
-            seed=key
-            )
+    # Run the mcmc chain
+    samples, pkr = tfp.mcmc.sample_chain(
+        num_results=num_results,
+        num_burnin_steps=num_burnin_steps,
+        num_steps_between_results=num_steps_between_results,
+        kernel=kernel,
+        trace_fn=trace_fn,
+        current_state=state,
+        seed=key
+        )
     
     return samples, pkr
 
-
+# Run the chain with a random seed 
 start_time = time.time()
 np.random.seed(seed)
 state = np.random.random((num_params,)) # used for 29091984
-#state = np.array(utils.minmax_scale_input(np.array([90, .5, 1.7, 1.4, 1.1 ]))) # This is ~MLE
-#state = 0.5 * np.ones((5,), dtype='float32')
 key = random.PRNGKey(seed)
 samples_transformed_all, pkr_all = run_chain(key, state)
+
 # Remove duplicates.
 samples_transformed, pkr = utils.remove_consecutive_duplicates(samples_transformed_all, pkr_all, atol=0.0)
-if mcmc_or_hmc == 'mcmc': log_accept_ratio, log_probs  = pkr
+
+# Different values are traced and returned depending on mcmc or hmc
+if mcmc_or_hmc == 'mcmc': log_accept_ratio  = pkr
 else: log_accept_ratio, log_probs, step_sizes = pkr
-#all_log_accept_ratio, all_log_probs, all_step_sizes = pkr_all
 print('Finished in %d minutes.' % int((time.time() - start_time)//60))
 print(f'Acceptance rate: {len(samples_transformed)/len(samples_transformed_all)}. Decrease step_size to increase rate.')
 
@@ -201,15 +195,14 @@ samples = utils.untransform_input(samples_transformed)
 
 # Save results: samples and plots
 np.savetxt(fname=f'{results_dir}/samples_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=samples, delimiter=',')
-np.savetxt(fname=f'{results_dir}/logprobs_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=log_probs, delimiter=',')
 np.savetxt(fname=f'{results_dir}/logacceptratio_{SLURM_ARRAY_TASK_ID}.csv', X=log_accept_ratio, delimiter=',')
 if mcmc_or_hmc == 'hmc':
     np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_sizes, delimiter=',')
+    np.savetxt(fname=f'{results_dir}/logprobs_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=log_probs, delimiter=',')
 
 # Get NN predictions on these samples.
 from preprocess.preprocess import transform_input, untransform_input
 specified_parameters_transformed = transform_input(np.array(specified_parameters).reshape((1,-1)))
-
 xs = utils._form_batch(samples_transformed, specified_parameters_transformed)
 model = kerasjk.models.load_model(model_path)
 predictions_transformed = model.predict(xs, verbose=2)

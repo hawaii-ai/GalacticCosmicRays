@@ -24,8 +24,9 @@ def index_mcmc_runs():
 df = index_mcmc_runs()  # List of all 210 experiments.
 
 # Model specification
-version = 'v15.0'
+version = 'v21.0'
 reduce_by = 1 # 9 for v2.0/v5.0, 30 for v6.0, 1 for all other versions
+reduce_samples = False
 
 # Setup  output directory.
 results_dir = f'../../../results/{version}/'
@@ -55,10 +56,21 @@ for i in range(0, len(df)):
     # logprobs = np.loadtxt(f'{results_dir}logprobs_{i}_{experiment_name}_{interval}_{polarity}.csv', delimiter=',')
     # predictions = np.loadtxt(f'{results_dir}predictions_{i}_{experiment_name}_{interval}_{polarity}.csv', delimiter=',')
     
-    # Examine only a few samples. Take 1 out of every 9 samples.
-    samples = samples[::reduce_by, :]
-    samples_small = samples[::50, :]
-    print(f"Samples shape: {samples.shape}. Small samples shape: {samples_small.shape}")
+    if reduce_samples:
+        # Examine only a few samples. Take 1 out of every 9 samples.
+        samples = samples[::reduce_by, :]
+        samples_small = samples[::50, :]
+        lags = 500
+        print(f"Samples shape: {samples.shape}. Small samples shape: {samples_small.shape}")
+    else: 
+        samples_small = samples
+        lags = samples.shape[0] - 1
+        print(f"Samples shape: {samples.shape}. Lags: {lags}")
+
+        if samples.shape[0] < 2:
+            print(f"Sample number {i}: less than 2 samples. Skipping.")
+            continue
+
 
     # Make a 5 by 2 plot of the trace and acf of the samples
     fig, axes = plt.subplots(5, 2, figsize=(22, 20))
@@ -68,7 +80,6 @@ for i in range(0, len(df)):
     axes[3, 0].plot(samples_small[:, 3])
     axes[4, 0].plot(samples_small[:, 4])
 
-    lags = 500
     plot_acf(samples[:, 0], lags=lags, ax=axes[0, 1], title="", markersize=0)
     plot_acf(samples[:, 1], lags=lags, ax=axes[1, 1], title="", markersize=0)
     plot_acf(samples[:, 2], lags=lags, ax=axes[2, 1], title="", markersize=0)
