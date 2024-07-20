@@ -23,36 +23,55 @@ from preprocess.preprocess import transform_input, untransform_input
 from preprocess.preprocess import PARAMETERS_MIN, PARAMETERS_MAX
 from chi2 import CalculateChi2
 
-def index_mcmc_runs():
+def index_mcmc_runs(file_version):
     """Make a list of combinations for which we want to run MCMC."""
-    experiments = ['AMS02_H-PRL2021', 'PAMELA_H-ApJ2013', 'PAMELA_H-ApJL2018']
-    dfs = []
-    for experiment_name in experiments:
-        filename = f'../data/2023/{experiment_name}_heliosphere.dat'
-        df = index_experiment_files(filename) 
-        df['experiment_name'] = experiment_name
-        df['filename_heliosphere'] = filename
-        dfs.append(df)
-    df = pd.concat(dfs, axis=0, ignore_index=0)
-    return df
+    if file_version == '2023':
+        experiments = ['AMS02_H-PRL2021', 'PAMELA_H-ApJ2013', 'PAMELA_H-ApJL2018']
+        dfs = []
+        for experiment_name in experiments:
+            filename = f'../data/2023/{experiment_name}_heliosphere.dat'
+            df = index_experiment_files(filename, file_version) 
+            df['experiment_name'] = experiment_name
+            df['filename_heliosphere'] = filename
+            dfs.append(df)
+        df = pd.concat(dfs, axis=0, ignore_index=0)
 
+    elif file_version == '2024':
+        filename = f'../data/2024/yearly_heliosphere.dat'
+        df = read_experiment_summary(filename)
+        df['filename_heliosphere'] = filename
+
+    else: raise ValueError(f'Unknown file_version {file_version}. Must be '2023' or '2024'.')
+
+    return df
 
 def read_experiment_summary(filename) -> pd.DataFrame:
     """
     Read .dat filename that describes experimental conditions during time intervals.
-    Update 2023: Added vspoles and vspoles std
     """
-    # Header reads "time interval; alpha avg; cmf avg; vspoles avg; alpha std; cmf std; vspoles std"
-    df = pd.read_csv(filename, sep=' ', skiprows=1, names=['interval', 'alpha', 'cmf', 'vspoles', 'alpha_std', 'cmf_std', 'vspoles_std'])
+    if '2023' in filename: file_version = '2023'
+    elif '2024' in filename: file_version = '2024'
+    else: raise ValueError(f'Unknown file_version in {filename}. Must be 2023 or 2024.')
+
+    if file_version == '2023':
+        # Header reads "time interval; alpha avg; cmf avg; vspoles avg; alpha std; cmf std; vspoles std"
+        df = pd.read_csv(filename, sep=' ', skiprows=1, names=['interval', 'alpha', 'cmf', 'vspoles', 'alpha_std', 'cmf_std', 'vspoles_std'])
+    
+    elif file_version == '2024':
+        # Header reads "time interval; alpha avg; cmf avg; vspoles avg; alpha std; cmf std; vspoles std; polarity"
+        df_full = pd.read_csv(filename, sep=' ', skiprows=1, names=['interval', 'alpha', 'cmf', 'vspoles', 'alpha_std', 'cmf_std', 'vspoles_std', 'polarity'])
+
+        # only use the neg or neg,pos polarities column
+        df = df_full[df_full['polarity'].str.contains('neg')].copy(deep=True)
 
     # Parse interval
     df['beginning'] = df.interval.apply(lambda x: pd.to_datetime(x.split('-')[0], format='%Y%m%d'))
     df['ending'] = df.interval.apply(lambda x: pd.to_datetime(x.split('-')[0], format='%Y%m%d'))
     return df
 
-
 def index_experiment_files(filename)->pd.DataFrame:
-    """Create list of experiments that need to be done.
+    """Create list of experiments that need to be done. 
+    Note this is only needed for file_version '2023'
     filename = f'../data/2023/{EXPERIMENT_NAME}_heliosphere.dat'
     """
     df = read_experiment_summary(filename)
@@ -88,7 +107,6 @@ def get_interval(filename, index: int) -> str:
     else:
         raise ValueError(f'Index {index} exceeds zero-indexed list of intervals in {filename} of length {df.shape[0]}.')
 
-
 def get_parameters(filename, interval: str = None, return_std=False):
     """ Load  alpha and cmf from file supplied by Claudio.
         Use alpha and cmf mean over interval. 
@@ -114,16 +132,25 @@ def get_parameters(filename, interval: str = None, return_std=False):
                 row['cmf_std'].values[0], 
                 row['vspoles_std'].values[0])
     
-    
+
 def load_data_ams(filename):
     """ Load AMS data from Claudio. Each file contains measurements over a certain time interval. 
     Args:
         filename = Filename of observations.
                    Original dataset was '../data/BR2461.dat'
-                   New datasets are in ../data/oct2022/
+                   New datasets are in '../data/oct2022/'
+                   New yearly datasets are in '../data/2024/yearly'
     """
-    dataset_ams = np.loadtxt(filename) # Rigidity1, Rigidity2, Flux, Error
+    dataset_ams = np.loadtxt(filename) # Rigidity1, Rigidity2, Flux, Error, dataset (only if yearly dataset)
+
     r1, r2 = dataset_ams[:,0], dataset_ams[:,1]
+
+
+    if 'yearly' in filename: 
+        # Need to sort yearly datasets by r1
+        sort_indices = np.argsort(r1)
+        dataset_ams = dataset_ams[sort_indices, :]
+
     bins = np.concatenate([r1[:], r2[-1:]])
     observed = dataset_ams[:,2]   # Observed Flux
     uncertainty = dataset_ams[:,3]

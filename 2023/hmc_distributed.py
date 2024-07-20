@@ -30,6 +30,7 @@ import time
 from pathlib import Path
 from datetime import datetime
 import matplotlib.pyplot as plt
+import tensorflow as tf
 #import elegy # pip install elegy. # Trying to do this with keras core instead.
 from tensorflow_probability.substrates import jax as tfp
 tfd = tfp.distributions
@@ -47,14 +48,15 @@ except:
     SLURM_ARRAY_JOB_ID = 0
     DEBUG = True
 
+# Version specifications
+model_version = 'v3.0' # v2.0 is MSE NN, v3.0 is MAE NN
+hmc_version = 'v24.0'
+file_version = '2024'
+
 # Select experiment parameters
-df = utils.index_mcmc_runs()  # List of all experiments (0-209)
+df = utils.index_mcmc_runs(file_version=file_version)  # List of all experiments (0-209) for '2023', 0-14 for '2024'
 print(f'Found {df.shape[0]} combinations to run MCMC on. Performing MCMC on index {SLURM_ARRAY_TASK_ID}.')
 df = df.iloc[SLURM_ARRAY_TASK_ID]
-
-# Model specification
-model_version = 'v3.0' # v2.0 is MSE NN, v3.0 is MAE 
-hmc_version = 'v21.0'
 
 # Setup  output directory.
 results_dir = f'../../results/{hmc_version}/'
@@ -63,7 +65,10 @@ print(f'Running HMC version {hmc_version} on model version {model_version}. The 
 
 # Load observation data and define logprob. 
 specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval)
-data_path = f'../data/oct2022/{df.experiment_name}/{df.experiment_name}_{df.interval}.dat'  # This data is the same.
+if file_version == '2023': data_path = f'../data/oct2022/{df.experiment_name}/{df.experiment_name}_{df.interval}.dat'  # This data is the same.
+elif file_version == '2024': 
+    year = 2000 + SLURM_ARRAY_TASK_ID # assumes only negative intervals. If otherwise, fix this
+    data_path = f'../data/2024/yearly/{year}.dat'
 model_path = f'../models/model_{model_version}_{df.polarity}.keras'
 seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
 penalty = 1e6
@@ -91,14 +96,17 @@ if DEBUG:
     max_energy_diff = 1000 #1e32 #1e21 # Default 1000.0. Divergent samples are those that exceed this.
     unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
 else:
-    mcmc_or_hmc = 'mcmc' # 'mcmc' or 'hmc'
-    num_results = 1_000_000 #110_000 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
+    mcmc_or_hmc = 'hmc' # 'mcmc' or 'hmc'
+    num_results = 110_000 #110_000 for hmc, 400_000 for mcmc
     num_steps_between_results = 100 # Thinning
     num_burnin_steps = 100_000 # Number of steps before beginning sampling
-    
+
+    # Note: this is just for mcmc
+    scale = 1e-2
+
     # Note: below parameters are only for hmc
     num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
-    step_size = 1e-4 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves
+    step_size = 1e-4 # 1e-4 is good for hmc
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
     max_energy_diff = 1000 # Default 1000.0. Divergent samples are those that exceed this.
     unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
@@ -108,20 +116,16 @@ def run_chain(key, state):
     if mcmc_or_hmc == 'mcmc':
         # Kernel for MCMC is RandomWalkMetropolis
         kernel = tfp.mcmc.RandomWalkMetropolis(
-            target_log_prob,
-            new_state_fn=None, # If None, is the normal distribution
-            experimental_shard_axis_names=None,
-            name=None
+            target_log_prob_fn=target_log_prob,
+            new_state_fn=tfp.mcmc.random_walk_normal_fn(scale=scale),
         )
 
-        # MetropolisHastingsKernelResults doesn't have a step_size or target_log_prob attribute, 
-        # so we can't do DualAveragingStepSizeAdaptation or trace those values
         def trace_fn(_, pkr):
             return [pkr.log_accept_ratio]
         
     else:
         # Kernel for HMC is NoUTurnSampler
-        kernel = tfp.mcmc.NoUTurnSampler(
+        inner_kernel = tfp.mcmc.NoUTurnSampler(
             target_log_prob, 
             step_size=step_size, 
             max_tree_depth=max_tree_depth, 
@@ -137,8 +141,8 @@ def run_chain(key, state):
 
         # Adjust step size of mcmc kernel to have noisy steps
         kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(
-            kernel,
-            num_adaptation_steps=int(num_burnin_steps * 0.8),
+            inner_kernel,
+            num_adaptation_steps=num_adaptation_steps,
             step_size_setter_fn=lambda pkr, new_step_size: pkr._replace(step_size=new_step_size),
             step_size_getter_fn=lambda pkr: pkr.step_size,
             log_accept_prob_getter_fn=lambda pkr: pkr.log_accept_ratio,
@@ -176,6 +180,7 @@ samples_transformed, pkr = utils.remove_consecutive_duplicates(samples_transform
 # Different values are traced and returned depending on mcmc or hmc
 if mcmc_or_hmc == 'mcmc': log_accept_ratio  = pkr
 else: log_accept_ratio, log_probs, step_sizes = pkr
+
 print('Finished in %d minutes.' % int((time.time() - start_time)//60))
 print(f'Acceptance rate: {len(samples_transformed)/len(samples_transformed_all)}. Decrease step_size to increase rate.')
 

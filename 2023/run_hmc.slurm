@@ -2,18 +2,18 @@
 # See https://slurm.schedmd.com/job_array.html
 # See https://uhawaii.atlassian.net/wiki/spaces/HPC/pages/430407770/The+Basics+Partition+Information+on+Koa for KOA partition info
 
-#SBATCH --partition=koa # koa, sadow, gpu, shared, kill-shared, exclusive-long
-#SBATCH --account=koa
+#SBATCH --partition=sadow # koa, sadow, gpu, shared, kill-shared, exclusive-long
+#SBATCH --account=sadow
 ##SBATCH --nodelist=gpu-0008
 
-#SBATCH --array=0-132 ## Negative intervals only
+##SBATCH --array=0-132 ## Negative intervals only 0-132, for new yearly data it's 0-14
 ##SBATCH --array=0-209 ## Negative and positive intervals
 ##BATCH --gres=gpu:1
 #SBATCH --cpus-per-task=3
 #SBATCH --mem=12000 ## max amount of memory per node you require
-#SBATCH --time=30-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on exclusive-long, 14day max on sadow, 30day max on koa
+#SBATCH --time=14-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on exclusive-long, 14day max on sadow, 30day max on koa
 
-#SBATCH --job-name=mcmc_randomwalk
+#SBATCH --job-name=hmc_yearly
 #SBATCH --output=job.out
 #SBATCH --output=logs/job-%A_%a.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
 #SBATCH --mail-type=START,END,FAIL
