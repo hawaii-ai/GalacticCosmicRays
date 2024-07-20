@@ -1,7 +1,7 @@
 """
 Distributed HMC
 Author: Peter July 2023
-Edited by Linnea August 2023
+Updated: Linnea July 2024
 
 Originally inspired by this example:
 https://colab.research.google.com/github/tensorflow/probability/blob/master/spinoffs/oryx/examples/notebooks/probabilistic_programming.ipynb#scrollTo=nmjmxzGhN855
@@ -12,18 +12,18 @@ https://colab.research.google.com/github/tensorflow/probability/blob/master/spin
 # pip install --upgrade "jax[cuda12_local]==0.4.13" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 # pip install jax pip tensorflow-probability
 # pip install matplotlib
-
 """
+
 import os
 os.environ["KERAS_BACKEND"] = "jax"  # Must be specified before loading keras_core
 os.environ["JAX_PLATFORM_NAME"] = "cpu"  # CPU is faster for batchsize=1 inference.
 
+import utils
 import keras_core as kerasjk
 import jax
 import jax.numpy as jnp
 from jax import random, vmap, jit, grad
 #assert jax.default_backend() == 'gpu'
-import utils
 import numpy as np
 import pandas as pd
 import time
@@ -50,7 +50,7 @@ except:
 
 # Version specifications
 model_version = 'v3.0' # v2.0 is MSE NN, v3.0 is MAE NN
-hmc_version = 'v24.0'
+hmc_version = 'v24.3'
 file_version = '2024'
 
 # Select experiment parameters
@@ -64,16 +64,19 @@ Path(results_dir).mkdir(parents=True, exist_ok=True)
 print(f'Running HMC version {hmc_version} on model version {model_version}. The results will be saved in {results_dir}.')
 
 # Load observation data and define logprob. 
-specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval)
 if file_version == '2023': data_path = f'../data/oct2022/{df.experiment_name}/{df.experiment_name}_{df.interval}.dat'  # This data is the same.
 elif file_version == '2024': 
     year = 2000 + SLURM_ARRAY_TASK_ID # assumes only negative intervals. If otherwise, fix this
     data_path = f'../data/2024/yearly/{year}.dat'
 model_path = f'../models/model_{model_version}_{df.polarity}.keras'
+
+# Define parameters for HMC
 seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
 penalty = 1e6
 integrate = False # If False, Chi2 is interpolated. If True, Chi2 is integrated.
-par_equals_perr = False # If True, only 3 parameters will be sampled by the HMC and pwr1par==pwr1perr and pwr2par==pwr2perr
+par_equals_perr = True # If True, only 3 parameters will be sampled by the HMC and pwr1par==pwr1perr and pwr2par==pwr2perr
+constant_vspoles = True # If True, vspoles is fixed to 400.0. If False, vspoles is specified in the data file.
+specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval, constant_vspoles=constant_vspoles)
 
 # Number of parameters for HMC to sample. 5 normally, 3 if par_equals_perr=True
 if par_equals_perr:

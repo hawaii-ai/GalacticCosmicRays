@@ -39,9 +39,10 @@ def index_mcmc_runs(file_version):
     elif file_version == '2024':
         filename = f'../data/2024/yearly_heliosphere.dat'
         df = read_experiment_summary(filename)
+        df['experiment_name'] = 'yearly'
         df['filename_heliosphere'] = filename
 
-    else: raise ValueError(f'Unknown file_version {file_version}. Must be '2023' or '2024'.')
+    else: raise ValueError(f"Unknown file_version {file_version}. Must be '2023' or '2024'.")
 
     return df
 
@@ -51,22 +52,24 @@ def read_experiment_summary(filename) -> pd.DataFrame:
     """
     if '2023' in filename: file_version = '2023'
     elif '2024' in filename: file_version = '2024'
-    else: raise ValueError(f'Unknown file_version in {filename}. Must be 2023 or 2024.')
+    else: raise ValueError(f"Unknown file_version {file_version}. Must be '2023' or '2024'.")
 
     if file_version == '2023':
         # Header reads "time interval; alpha avg; cmf avg; vspoles avg; alpha std; cmf std; vspoles std"
         df = pd.read_csv(filename, sep=' ', skiprows=1, names=['interval', 'alpha', 'cmf', 'vspoles', 'alpha_std', 'cmf_std', 'vspoles_std'])
     
+        # Parse interval
+        df['beginning'] = df.interval.apply(lambda x: pd.to_datetime(x.split('-')[0], format='%Y%m%d'))
+        df['ending'] = df.interval.apply(lambda x: pd.to_datetime(x.split('-')[0], format='%Y%m%d'))
+
     elif file_version == '2024':
         # Header reads "time interval; alpha avg; cmf avg; vspoles avg; alpha std; cmf std; vspoles std; polarity"
         df_full = pd.read_csv(filename, sep=' ', skiprows=1, names=['interval', 'alpha', 'cmf', 'vspoles', 'alpha_std', 'cmf_std', 'vspoles_std', 'polarity'])
 
-        # only use the neg or neg,pos polarities column
+        # only use the neg or neg,pos polarities column, and change all to be neg
         df = df_full[df_full['polarity'].str.contains('neg')].copy(deep=True)
+        df['polarity'] = 'neg'
 
-    # Parse interval
-    df['beginning'] = df.interval.apply(lambda x: pd.to_datetime(x.split('-')[0], format='%Y%m%d'))
-    df['ending'] = df.interval.apply(lambda x: pd.to_datetime(x.split('-')[0], format='%Y%m%d'))
     return df
 
 def index_experiment_files(filename)->pd.DataFrame:
@@ -98,7 +101,6 @@ def index_experiment_files(filename)->pd.DataFrame:
 def get_interval(filename, index: int) -> str:
     """
     Return time interval for the given index (zero indexed, so first index is 0).
-
     """
     assert index >= 0, index
     df = read_experiment_summary(filename)
@@ -107,7 +109,7 @@ def get_interval(filename, index: int) -> str:
     else:
         raise ValueError(f'Index {index} exceeds zero-indexed list of intervals in {filename} of length {df.shape[0]}.')
 
-def get_parameters(filename, interval: str = None, return_std=False):
+def get_parameters(filename, interval: str = None, return_std=False, constant_vspoles=False):
     """ Load  alpha and cmf from file supplied by Claudio.
         Use alpha and cmf mean over interval. 
         Ignores std for now.
@@ -120,7 +122,12 @@ def get_parameters(filename, interval: str = None, return_std=False):
     row = df.loc[df['interval'] == interval]
     alpha = row['alpha'].values[0]
     cmf = row['cmf'].values[0]
-    vspoles = row['vspoles'].values[0] # 400.0
+
+    # If constant vspoles, then we fix vspoles to 400.0
+    if constant_vspoles:
+        vspoles = 400.0
+    else: 
+        vspoles = row['vspoles'].values[0]
 
     if not return_std:
         return alpha, cmf, vspoles
@@ -141,12 +148,10 @@ def load_data_ams(filename):
                    New datasets are in '../data/oct2022/'
                    New yearly datasets are in '../data/2024/yearly'
     """
-    dataset_ams = np.loadtxt(filename) # Rigidity1, Rigidity2, Flux, Error, dataset (only if yearly dataset)
-
+    dataset_ams = np.loadtxt(filename, usecols=(0,1,2,3)) # Rigidity1, Rigidity2, Flux, Error, dataset (only if yearly dataset)
     r1, r2 = dataset_ams[:,0], dataset_ams[:,1]
 
-
-    if 'yearly' in filename: 
+    if 'yearly' in filename:
         # Need to sort yearly datasets by r1
         sort_indices = np.argsort(r1)
         dataset_ams = dataset_ams[sort_indices, :]
