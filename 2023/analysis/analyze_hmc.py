@@ -7,26 +7,37 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 from statsmodels.graphics.tsaplots import plot_acf
 
-def index_mcmc_runs():
+def index_mcmc_runs(file_version):
     """Make a list of combinations for which we want to run MCMC."""
-    experiments = ['AMS02_H-PRL2021', 'PAMELA_H-ApJ2013', 'PAMELA_H-ApJL2018']
-    dfs = []
-    for experiment_name in experiments:
-        filename = f'../../data/2023/{experiment_name}_heliosphere.dat'
-        df = utils.index_experiment_files(filename) 
-        df['experiment_name'] = experiment_name
+    if file_version == '2023':
+        experiments = ['AMS02_H-PRL2021', 'PAMELA_H-ApJ2013', 'PAMELA_H-ApJL2018']
+        dfs = []
+        for experiment_name in experiments:
+            filename = f'../../data/2023/{experiment_name}_heliosphere.dat'
+            df = utils.index_experiment_files(filename, file_version) 
+            df['experiment_name'] = experiment_name
+            df['filename_heliosphere'] = filename
+            dfs.append(df)
+        df = pd.concat(dfs, axis=0, ignore_index=0)
+
+    elif file_version == '2024':
+        filename = f'../../data/2024/yearly_heliosphere.dat'
+        df = utils.read_experiment_summary(filename)
+        df['experiment_name'] = 'yearly'
         df['filename_heliosphere'] = filename
-        dfs.append(df)
-    df = pd.concat(dfs, axis=0, ignore_index=0)
+
+    else: raise ValueError(f"Unknown file_version {file_version}. Must be '2023' or '2024'.")
+
     return df
 
-# Select experiment parameters
-df = index_mcmc_runs()  # List of all 210 experiments.
-
 # Model specification
-version = 'v21.0'
+version = 'v24.0'
+file_version = '2024'
 reduce_by = 1 # 9 for v2.0/v5.0, 30 for v6.0, 1 for all other versions
 reduce_samples = False
+
+# Select experiment parameters
+df = index_mcmc_runs(file_version=file_version)  # List of all experiments (0-209) for '2023', 0-14 for '2024'
 
 # Setup  output directory.
 results_dir = f'../../../results/{version}/'
@@ -38,13 +49,14 @@ for i in range(0, len(df)):
     experiment_name = df["experiment_name"].iloc[i]
     interval = df.interval.iloc[i]
     polarity = df.polarity.iloc[i]
+    string_identifier = f"{i}_{experiment_name}_{interval}_{polarity}"
 
     # Check if a plot for this index exists; if so, skip
-    if Path(f'{figs_dir}{i}_{experiment_name}_{interval}_{polarity}.png').exists():
+    if Path(f'{figs_dir}{string_identifier}.png').exists():
         print(f"Sample number {i}: plot already exists. Skipping.")
         continue
 
-    filename = f'{results_dir}samples_{i}_{experiment_name}_{interval}_{polarity}.csv'
+    filename = f'{results_dir}samples_{string_identifier}.csv'
     print(f"Filename: {filename}")
 
     # Check if file exists; if not, skip
@@ -105,9 +117,9 @@ for i in range(0, len(df)):
         ax.set_ylabel(row, size='large')
 
     # Set super title that is the filename
-    fig.suptitle(f'samples_{i}_{experiment_name}_{interval}_{polarity}', fontsize=16)
+    fig.suptitle(f'samples_{string_identifier}', fontsize=16)
 
     # Remove whitespace below title and between columns
     fig.tight_layout(rect=[0, 0.03, 1, 0.95])  
 
-    plt.savefig(f'{figs_dir}{i}_{experiment_name}_{interval}_{polarity}.png')
+    plt.savefig(f'{figs_dir}{string_identifier}.png')

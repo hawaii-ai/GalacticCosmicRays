@@ -64,10 +64,14 @@ Path(results_dir).mkdir(parents=True, exist_ok=True)
 print(f'Running HMC version {hmc_version} on model version {model_version}. The results will be saved in {results_dir}.')
 
 # Load observation data and define logprob. 
-if file_version == '2023': data_path = f'../data/oct2022/{df.experiment_name}/{df.experiment_name}_{df.interval}.dat'  # This data is the same.
+if file_version == '2023': 
+    data_path = f'../data/oct2022/{df.experiment_name}/{df.experiment_name}_{df.interval}.dat'  # This data is the same.
 elif file_version == '2024': 
     year = 2000 + SLURM_ARRAY_TASK_ID # assumes only negative intervals. If otherwise, fix this
     data_path = f'../data/2024/yearly/{year}.dat'
+else:
+    raise ValueError(f"Invalid file_version {file_version}. Must be '2023' or '2024'.")
+
 model_path = f'../models/model_{model_version}_{df.polarity}.keras'
 
 # Define parameters for HMC
