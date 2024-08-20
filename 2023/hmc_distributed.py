@@ -50,7 +50,7 @@ except:
 
 # Version specifications
 model_version = 'v3.0' # v2.0 is MSE NN, v3.0 is MAE NN
-hmc_version = 'v24.3'
+hmc_version = 'v25.2'
 file_version = '2024'
 
 # Select experiment parameters
@@ -78,8 +78,8 @@ model_path = f'../models/model_{model_version}_{df.polarity}.keras'
 seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
 penalty = 1e6
 integrate = False # If False, Chi2 is interpolated. If True, Chi2 is integrated.
-par_equals_perr = True # If True, only 3 parameters will be sampled by the HMC and pwr1par==pwr1perr and pwr2par==pwr2perr
-constant_vspoles = True # If True, vspoles is fixed to 400.0. If False, vspoles is specified in the data file.
+par_equals_perr = False # If True, only 3 parameters will be sampled by the HMC and pwr1par==pwr1perr and pwr2par==pwr2perr
+constant_vspoles = False # If True, vspoles is fixed to 400.0. If False, vspoles is specified in the data file.
 specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval, constant_vspoles=constant_vspoles)
 
 # Number of parameters for HMC to sample. 5 normally, 3 if par_equals_perr=True

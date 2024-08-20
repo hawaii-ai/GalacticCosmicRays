@@ -30,7 +30,7 @@ def index_mcmc_runs(file_version):
         dfs = []
         for experiment_name in experiments:
             filename = f'../data/2023/{experiment_name}_heliosphere.dat'
-            df = index_experiment_files(filename, file_version) 
+            df = index_experiment_files(filename) 
             df['experiment_name'] = experiment_name
             df['filename_heliosphere'] = filename
             dfs.append(df)
@@ -155,6 +155,7 @@ def load_data_ams(filename):
         # Need to sort yearly datasets by r1
         sort_indices = np.argsort(r1)
         dataset_ams = dataset_ams[sort_indices, :]
+        r1, r2 = dataset_ams[:,0], dataset_ams[:,1]
 
     bins = np.concatenate([r1[:], r2[-1:]])
     observed = dataset_ams[:,2]   # Observed Flux
@@ -236,7 +237,6 @@ def remove_outliers(samples,  min_bound=PARAMETERS_MIN, max_bound=PARAMETERS_MAX
     outlier = np.bitwise_or(samples < min_bound - buffer, samples > max_bound + buffer)
     outlier = np.any(outlier, axis=1)
     return samples[~outlier, :]
-
 
 
 def _form_batch(params_trans, params_spec_trans):

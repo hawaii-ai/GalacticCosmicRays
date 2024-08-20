@@ -6,7 +6,7 @@
 ##SBATCH --account=sadow
 ##SBATCH --nodelist=gpu-0008
 
-#SBATCH --array=0-14 ## Negative intervals only 0-132, for new yearly data it's 0-14, for negative + positive intervals it's 0-209
+#SBATCH --array=0-14 ## Negative intervals only 0-132 and for new yearly data that's 0-14, for old data negative + positive intervals it's 0-209
 ##BATCH --gres=gpu:1
 #SBATCH --cpus-per-task=3
 #SBATCH --mem=12000 ## max amount of memory per node you require
