@@ -161,13 +161,17 @@ def load_data_ams(filename):
     observed = dataset_ams[:,2]   # Observed Flux
     uncertainty = dataset_ams[:,3]
     assert len(bins) == len(observed)+1
-    return bins, observed, uncertainty
+
+    # bin_midpoints = (r1 + r2)/2  # Arithmetic mean
+    bin_midpoints = (r1 * r2) ** 0.5  # Geometric mean seemed to work better in exp.
+
+    return bins, bin_midpoints, observed, uncertainty
 
 
 def load_preprocessed_data_ams(filename):
     """ Load AMS data along with hardcoded auxiliary vectors for ppmodel.
     """
-    bins, observed, uncertainty = load_data_ams(filename)
+    bins, bin_midpoints, observed, uncertainty = load_data_ams(filename)
     # iloc = np.searchsorted(RIGIDITY_VALS, bins)
     # xloc = np.sort(np.concatenate([RIGIDITY_VALS, bins]))
     # assert np.all(xloc[iloc] == bins)
@@ -292,9 +296,7 @@ def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9, in
     model.run_eagerly = True # Settable attribute (in elegy). Required to be true for ppmodel.
 
     # Load observation data from Claudio
-    bins, observed, uncertainty = load_data_ams(data_path)
-    #bin_midpoints = (bins[:-1] + bins[1:])/2  # Arithmetic mean
-    bin_midpoints = (bins[:-1] * bins[1:]) ** 0.5  # Geometric mean seemed to work better in exp.
+    bins, bin_midpoints, observed, uncertainty = load_data_ams(data_path)
 
     # Transform input parameters to be in range 0--1.
     parameters_specified_transformed = transform_input(jnp.array(parameters_specified))

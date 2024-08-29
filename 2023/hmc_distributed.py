@@ -27,6 +27,7 @@ from jax import random, vmap, jit, grad
 import numpy as np
 import pandas as pd
 import time
+import argparse
 from pathlib import Path
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -48,47 +49,59 @@ except:
     SLURM_ARRAY_JOB_ID = 0
     DEBUG = True
 
-# Version specifications
-model_version = 'v3.0' # v2.0 is MSE NN, v3.0 is MAE NN
-hmc_version = 'v25.2'
-file_version = '2024'
+# Parse arguments
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--model_version', type=str, default='v3.0')
+parser.add_argument('--hmc_version', type=str, default='v25.0')
+parser.add_argument('--file_version', type=str, default='2024')
+parser.add_argument('--integrate', type=str2bool, default=False)
+parser.add_argument('--par_equals_perr', type=str2bool, default=False)
+parser.add_argument('--constant_vspoles', type=str2bool, default=False)
+args = parser.parse_args()
 
 # Select experiment parameters
-df = utils.index_mcmc_runs(file_version=file_version)  # List of all experiments (0-209) for '2023', 0-14 for '2024'
+df = utils.index_mcmc_runs(file_version=args.file_version)  # List of all experiments (0-209) for '2023', 0-14 for '2024'
 print(f'Found {df.shape[0]} combinations to run MCMC on. Performing MCMC on index {SLURM_ARRAY_TASK_ID}.')
 df = df.iloc[SLURM_ARRAY_TASK_ID]
 
 # Setup  output directory.
-results_dir = f'../../results/{hmc_version}/'
+results_dir = f'../../results/{args.hmc_version}/'
 Path(results_dir).mkdir(parents=True, exist_ok=True)
-print(f'Running HMC version {hmc_version} on model version {model_version}. The results will be saved in {results_dir}.')
+print(f'Running HMC version {args.hmc_version} on model version {args.model_version}. The results will be saved in {results_dir}.')
 
 # Load observation data and define logprob. 
-if file_version == '2023': 
+if args.file_version == '2023': 
     data_path = f'../data/oct2022/{df.experiment_name}/{df.experiment_name}_{df.interval}.dat'  # This data is the same.
-elif file_version == '2024': 
+elif args.file_version == '2024': 
     year = 2000 + SLURM_ARRAY_TASK_ID # assumes only negative intervals. If otherwise, fix this
     data_path = f'../data/2024/yearly/{year}.dat'
 else:
-    raise ValueError(f"Invalid file_version {file_version}. Must be '2023' or '2024'.")
+    raise ValueError(f"Invalid file_version {args.file_version}. Must be '2023' or '2024'.")
 
-model_path = f'../models/model_{model_version}_{df.polarity}.keras'
+model_path = f'../models/model_{args.model_version}_{df.polarity}.keras'
 
 # Define parameters for HMC
 seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
 penalty = 1e6
-integrate = False # If False, Chi2 is interpolated. If True, Chi2 is integrated.
-par_equals_perr = False # If True, only 3 parameters will be sampled by the HMC and pwr1par==pwr1perr and pwr2par==pwr2perr
-constant_vspoles = False # If True, vspoles is fixed to 400.0. If False, vspoles is specified in the data file.
-specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval, constant_vspoles=constant_vspoles)
+specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval, constant_vspoles=args.constant_vspoles)
 
 # Number of parameters for HMC to sample. 5 normally, 3 if par_equals_perr=True
-if par_equals_perr:
+if args.par_equals_perr:
     num_params = 3
 else:
     num_params = 5
 
-target_log_prob = utils.define_log_prob(model_path, data_path, specified_parameters, penalty=penalty, integrate=integrate, par_equals_perr=par_equals_perr)
+target_log_prob = utils.define_log_prob(model_path, data_path, specified_parameters, penalty=penalty, integrate=args.integrate, par_equals_perr=args.par_equals_perr)
 
 # Hyperparameters for MCMC
 if DEBUG:
@@ -193,7 +206,7 @@ print(f'Acceptance rate: {len(samples_transformed)/len(samples_transformed_all)}
 
 # If par==perr, then only predicting ['cpa', 'pwr1par', 'pwr2par']. Need to create array of ['cpa', 'pwr1par', 'pwr1par', 'pwr2par', 'pwr2par']
 # Need to adjust every row in samples to be [cpa, pwr1par, pwr1par, pwr2par, pwr2par] where pwr1par==pwr1perr and pwr2par==pwr2perr
-if par_equals_perr:
+if args.par_equals_perr:
     expanded_samples = np.zeros((samples_transformed.shape[0], 5))
     expanded_samples = np.column_stack((samples_transformed[:, 0], 
                                     samples_transformed[:, 1], 
