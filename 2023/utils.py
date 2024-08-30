@@ -140,13 +140,15 @@ def get_parameters(filename, interval: str = None, return_std=False, constant_vs
                 row['vspoles_std'].values[0])
     
 
-def load_data_ams(filename):
+def load_data_ams(filename, integrate=False):
     """ Load AMS data from Claudio. Each file contains measurements over a certain time interval. 
     Args:
         filename = Filename of observations.
                    Original dataset was '../data/BR2461.dat'
                    New datasets are in '../data/oct2022/'
                    New yearly datasets are in '../data/2024/yearly'
+        integrate = If True, integrate over bin regions, so return r1, r2
+                Otherwise, interpolate flux at the geoemtric mean of the bin and return bin_midpoints
     """
     dataset_ams = np.loadtxt(filename, usecols=(0,1,2,3)) # Rigidity1, Rigidity2, Flux, Error, dataset (only if yearly dataset)
     r1, r2 = dataset_ams[:,0], dataset_ams[:,1]
@@ -165,13 +167,19 @@ def load_data_ams(filename):
     # bin_midpoints = (r1 + r2)/2  # Arithmetic mean
     bin_midpoints = (r1 * r2) ** 0.5  # Geometric mean seemed to work better in exp.
 
-    return bins, bin_midpoints, observed, uncertainty
+    if integrate:
+        return bins, zip(r1, r2), observed, uncertainty
+    else:
+        return bins, bin_midpoints, observed, uncertainty
 
 
-def load_preprocessed_data_ams(filename):
+def load_preprocessed_data_ams(filename, integrate=False):
     """ Load AMS data along with hardcoded auxiliary vectors for ppmodel.
     """
-    bins, bin_midpoints, observed, uncertainty = load_data_ams(filename)
+    if integrate:
+        bins, r1r2, observed, uncertainty = load_data_ams(filename, integrate)
+    else:
+        bins, bin_midpoints, observed, uncertainty = load_data_ams(filename, integrate)
     # iloc = np.searchsorted(RIGIDITY_VALS, bins)
     # xloc = np.sort(np.concatenate([RIGIDITY_VALS, bins]))
     # assert np.all(xloc[iloc] == bins)
@@ -296,7 +304,10 @@ def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9, in
     model.run_eagerly = True # Settable attribute (in elegy). Required to be true for ppmodel.
 
     # Load observation data from Claudio
-    bins, bin_midpoints, observed, uncertainty = load_data_ams(data_path)
+    if integrate:
+        bins, r1r2, observed, uncertainty = load_data_ams(data_path, integrate)
+    else:
+        bins, bin_midpoints, observed, uncertainty = load_data_ams(data_path, integrate)
 
     # Transform input parameters to be in range 0--1.
     parameters_specified_transformed = transform_input(jnp.array(parameters_specified))
@@ -335,12 +346,12 @@ def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9, in
         yhat_interp_integrated = []
 
         if integrate:
-            # Compute integral for each bin
-            for x1, x2 in zip(bins[:-1], bins[1:]):
+            # Compute integral for each r1-r2 range
+            for x1, x2 in r1r2:
                 integral = chi2.compute_integral(x1, x2) / (x2 - x1)
                 yhat_interp_integrated.append(integral)
         else:
-            # Compute interpolated value for each bin
+            # Compute interpolated value at each bin_midpoint
             for x in bin_midpoints:
                 interpolated = chi2.interpolate_model(x)
                 yhat_interp_integrated.append(interpolated)
