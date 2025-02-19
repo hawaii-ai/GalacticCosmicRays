@@ -12,7 +12,7 @@
 
 #SBATCH --job-name=gcr_nn
 #SBATCH --output=./logs/analysis-%A.out
-#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=linneamw@hawaii.edu
 
 # Load python profile, then call python script passing SLURM_ARRAY_TASK_ID as an argument.
@@ -20,9 +20,10 @@ source ~/profiles/auto.profile
 conda activate gcr
 
 # Create TRAIN_SIZE_PERCENT array, and run for different percentages of the training set size
-TRAIN_SIZE_PERCENT=( 1 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1 )
-for i in "${TRAIN_SIZE_PERCENT[@]}"
+size_percents=(1 0.9 0.8 0.7 0.6 0.5 0.4 0.3 0.2 0.1)
+for i in "${size_percents[@]}"
 do
-    python nn_train_size_analysis.py --TRAIN_SIZE_PERCENT $i --POLARITY "pos"
-    python nn_train_size_analysis.py --TRAIN_SIZE_PERCENT $i --POLARITY "neg"
+    echo "train size percentage: $i"
+    python nn_train_size_analysis.py --polarity "pos" --train_size_percent $i
+    python nn_train_size_analysis.py --polarity "neg" --train_size_percent $i 
 done

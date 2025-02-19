@@ -9,6 +9,7 @@ import numpy as np
 import h5py
 import matplotlib.pyplot as plt
 import datetime
+import argparse
 
 import keras_core as keras
 
@@ -17,11 +18,14 @@ from tensorflow.data import Dataset
 from tensorflow.data.experimental import AUTOTUNE
 
 def main():
-    polarity = os.getenv('POLARITY')
-    train_size_percent = os.getenv('TRAIN_SIZE_PERCENT')
+    # Parse command line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--polarity', type=str, help='The polarity of the data to train on. Either pos or neg.')
+    parser.add_argument('--train_size_percent', type=float, help='The percentage of the training data to use. Must be between 0 and 1.')
+    args = parser.parse_args()
 
     data_path = '/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/2023_07_01'
-    data_file = f'{data_path}/{polarity}/model_collection_1AU_90deg_0deg_fixed_training.h5'
+    data_file = f'{data_path}/{args.polarity}/model_collection_1AU_90deg_0deg_fixed_training.h5'
     # 8 input parameters for the NN: alpha, cmf, vspoles, cpa, pwr1par, pwr2par, pwr1perr, and pwr2perr.
     # features = ['alpha', 'cmf', 'cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr', 'vspoles']
     with h5py.File(data_file, 'r') as h5:
@@ -32,12 +36,12 @@ def main():
 
     # Split
     full = Dataset.zip((x, y))
-    train = full.take(np.floor(num_samples *.9))#.repeat()
-    test = full.skip(np.floor(num_samples *.9))#.repeat()
+    test = full.skip(np.floor(num_samples *.9)) # Keep test set consistent as 10% of the data
 
     # Reduce train size based on the train_size_percent
-    train_size = len(train)
-    train = train.take(np.floor(train_size * train_size_percent))
+    train_size = np.floor(num_samples *.9 * args.train_size_percent)
+    train = full.take(train_size)
+    print(f'Train size: {train_size} = {args.train_size_percent} * {num_samples * .9}')
 
     # Batch
     batch_size = 128
@@ -45,9 +49,9 @@ def main():
     test = test.batch(batch_size, drop_remainder=True).prefetch(AUTOTUNE)
 
     # Some calcs
-    steps_per_epoch = int(num_samples * .9 / batch_size )
+    steps_per_epoch = int(train_size / batch_size )
     validation_steps = int(num_samples * .1 / batch_size)
-    print(f'Steps per epoch: {steps_per_epoch}')
+    print(f'Steps per epoch: {steps_per_epoch}, validation steps: {validation_steps}')
 
     # Define model. 
     l2 = keras.regularizers.L2(l2=1e-6)
@@ -60,8 +64,8 @@ def main():
 
     # Create save and log directories
     save_dir = '../models/model_size_investigation'
-    model_path = f'{save_dir}/model_train_size_{train_size_percent}_{polarity}.keras'  # Must end with keras.
-    log_dir = f'../../tensorboard_logs/fit/model_train_size_{train_size_percent}_{polarity}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
+    model_path = f'{save_dir}/model_train_size_{args.train_size_percent}_{args.polarity}.keras'  # Must end with keras.
+    log_dir = f'../../tensorboard_logs/fit/model_train_size_{args.train_size_percent}_{args.polarity}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
     
     print("\nTensorboard log dir: ", log_dir)
     if not os.path.exists(save_dir):
@@ -83,6 +87,7 @@ def main():
     history = model.fit(
         train,
         epochs=100,
+        steps_per_epoch=steps_per_epoch,
         validation_data=test,
         shuffle=False,
         verbose=2,
@@ -93,11 +98,10 @@ def main():
     train_mae = model.evaluate(train)
     test_mae = model.evaluate(test)
 
-    save_file = f'{save_dir}/{polarity}.csv'
+    save_file = f'{save_dir}/{args.polarity}.csv'
     with open(save_file, 'a') as f:
-        f.write(f'{train_size_percent},{train_mae},{test_mae}\n')
+        f.write(f'{args.train_size_percent},{train_mae},{test_mae}\n')
+        print(f'Saved to {save_file}\n')
 
-    return
-
-if main == '__main__':
+if __name__ == '__main__':
     main()
