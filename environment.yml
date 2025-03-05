@@ -134,4 +134,4 @@ dependencies:
     - werkzeug==2.3.6
     - wrapt==1.15.0
     - zipp==3.16.2
-prefix: /home/linneamw/sadow_lts/personal/linneamw/anaconda3/envs/gcr
+prefix: /home/linneamw/anaconda3/envs/gcr

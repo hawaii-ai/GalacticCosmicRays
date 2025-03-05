@@ -1,7 +1,6 @@
 """
 Train both the positive and negative NN with varying amounts of the training data to determine the effect of training data size on the model performance.
 """
-
 # Imports
 import os
 from collections import defaultdict
@@ -43,8 +42,19 @@ def main():
     train = full.take(train_size)
     print(f'Train size: {train_size} = {args.train_size_percent} * {num_samples * .9}')
 
-    # Batch
-    batch_size = 128
+    # Adaptively set batch_size based on the train_size
+    if train_size < 50:
+        batch_size = 8
+    elif train_size < 100:
+        batch_size = 16
+    elif train_size < 500:
+        batch_size = 32
+    elif train_size < 1000:
+        batch_size = 64
+    else:
+        batch_size = 128
+    print(f'Setting batch size: {batch_size}')
+
     train = train.batch(batch_size, drop_remainder=True).prefetch(AUTOTUNE)
     test = test.batch(batch_size, drop_remainder=True).prefetch(AUTOTUNE)
 

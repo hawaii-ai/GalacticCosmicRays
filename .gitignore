@@ -29,5 +29,7 @@ wheels/
 2023/logs/
 2025/logs/
 
-# Model predictions
+# Models
 models/predictions*
+models/model_size_investigation
+*.keras

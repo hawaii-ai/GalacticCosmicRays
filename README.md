@@ -10,3 +10,14 @@ Datasets used in this project.
 /notebooks
 Analysis notebooks.
 
+### Environment set-up
+Creating the environment is tricky, because it cannot be done directly from environment.yml. This is partly because of the need for ```"jax[cuda12_local]==0.4.13" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html```, which cannot be installed from conda.
+Requirements.txt has been edited to not have the jax line, and so after setting up some basic conda packages can be installed directly (with the need for installing jax separately). Installing in a different way may fail because jax, tensorflow, tensorflow-io, keras, keras-core, and tensorflow-probability all need to be compatible with each other.
+
+Instead, do the following:
+```
+conda install python=3.9 numpy scipy pandas matplotlib ipykernel
+conda install -c anaconda cudatoolkit
+pip install --upgrade "jax[cuda12_local]==0.4.13" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install -r requirements.txt
+```
