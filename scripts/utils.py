@@ -3,6 +3,11 @@ Utilities for running the MCMC.
 Most of the training data details are imported from preprocess.py
 These utils focus on the observation data. 
 """
+import preprocess as preprocess
+from preprocess import INPUTS, PARAMETERS, PARAMETERS_SPECIFIED, RIGIDITY_VALS
+from preprocess import transform_input, untransform_input
+from preprocess import PARAMETERS_MIN, PARAMETERS_MAX, Y_LOG_MAX
+from chi2 import CalculateChi2
 
 import os
 import numpy as np
@@ -10,18 +15,9 @@ import time
 from datetime import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
-
 import jax
-import jax.numpy as jnp
-#assert jax.default_backend() == 'gpu'
-                
+import jax.numpy as jnp            
 import keras_core as keras
-
-import preprocess.preprocess
-from preprocess.preprocess import INPUTS, PARAMETERS, PARAMETERS_SPECIFIED, RIGIDITY_VALS
-from preprocess.preprocess import transform_input, untransform_input
-from preprocess.preprocess import PARAMETERS_MIN, PARAMETERS_MAX
-from chi2 import CalculateChi2
 
 def index_mcmc_runs(file_version):
     """Make a list of combinations for which we want to run MCMC."""
@@ -234,9 +230,9 @@ def untransform_output(yhat):
     """
     NN is trained on transformed data. 
     Rigidity measurments were transformed at log(x)/Y_LOG_MAX.
-    See preprocess.preprocess.py
+    See preprocess.py
     """
-    yhat = yhat * preprocess.preprocess.Y_LOG_MAX # Undo max scaling.
+    yhat = yhat * Y_LOG_MAX # Undo max scaling.
     yhat = jnp.exp(yhat) # Undo log transform of target output.
     # yhat = np.exp(yhat) # Uncomment if getting jax errors
     return yhat

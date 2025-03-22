@@ -1,29 +1,20 @@
 """
 Distributed HMC
 Author: Peter July 2023
-Updated: Linnea July 2024
-
-Originally inspired by this example:
-https://colab.research.google.com/github/tensorflow/probability/blob/master/spinoffs/oryx/examples/notebooks/probabilistic_programming.ipynb#scrollTo=nmjmxzGhN855
-
-# New Requirements:
-# conda install python=3.9 numpy scipy pandas matplotlib
-# conda install -c anaconda cudatoolkit
-# pip install --upgrade "jax[cuda12_local]==0.4.13" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-# pip install jax pip tensorflow-probability
-# pip install matplotlib
+Updated: Linnea March 2025 (and many times since)
 """
 
 import os
 os.environ["KERAS_BACKEND"] = "jax"  # Must be specified before loading keras_core
 os.environ["JAX_PLATFORM_NAME"] = "cpu"  # CPU is faster for batchsize=1 inference.
 
-import utils
+import utils as utils
+from preprocess import transform_input, untransform_input
+
 import keras_core as kerasjk
 import jax
 import jax.numpy as jnp
 from jax import random, vmap, jit, grad
-#assert jax.default_backend() == 'gpu'
 import numpy as np
 import pandas as pd
 import time
@@ -32,11 +23,8 @@ from pathlib import Path
 from datetime import datetime
 import matplotlib.pyplot as plt
 import tensorflow as tf
-#import elegy # pip install elegy. # Trying to do this with keras core instead.
 from tensorflow_probability.substrates import jax as tfp
 tfd = tfp.distributions
-# %load_ext autoreload
-# %autoreload 2
 
 # Run in DEBUG mode if there is no slurm task id.
 try:
@@ -226,7 +214,6 @@ if mcmc_or_hmc == 'hmc':
     np.savetxt(fname=f'{results_dir}/logprobs_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=log_probs, delimiter=',')
 
 # Get NN predictions on these samples.
-from preprocess.preprocess import transform_input, untransform_input
 specified_parameters_transformed = transform_input(np.array(specified_parameters).reshape((1,-1)))
 xs = utils._form_batch(samples_transformed, specified_parameters_transformed)
 model = kerasjk.models.load_model(model_path)

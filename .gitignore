@@ -26,8 +26,8 @@ wheels/
 *.egg
 
 # Slurm log files
-2023/logs/
-2025/logs/
+scripts/logs/
+logs/
 
 # Models
 models/predictions*
