@@ -20,7 +20,8 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--polarity', type=str, help='The polarity of the data to train on. Either pos or neg.')
-    parser.add_argument('--train_size_percent', type=float, help='The percentage of the training data to use. Must be between 0 and 1.')
+    parser.add_argument('--train_size_fraction', type=float, help='The fraction of the training data to use. Must be between 0 and 1.')
+    parser.add_argument('--model_version', type=str, default='v0', help='The version of the model to use. Default is v0, so no shuffling of train set (take first x% of the train set)')
     args = parser.parse_args()
 
     data_path = '/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/2023_07_01'
@@ -35,12 +36,18 @@ def main():
 
     # Split
     full = Dataset.zip((x, y))
+    train = full.take(np.floor(num_samples *.9)) # Keep train set we sample from consistent as 90% of the data
     test = full.skip(np.floor(num_samples *.9)) # Keep test set consistent as 10% of the data
 
-    # Reduce train size based on the train_size_percent
-    train_size = np.floor(num_samples *.9 * args.train_size_percent)
-    train = full.take(train_size)
-    print(f'Train size: {train_size} = {args.train_size_percent} * {num_samples * .9}')
+    # Reduce train size based on the train_size_fraction
+    train_size = np.floor(num_samples *.9 * args.train_size_fraction)
+    if args.model_version == 'v1':
+        train_shuffled = train.shuffle(buffer_size=train.cardinality(), seed=42)
+    elif args.model_version == 'v2':
+        train_shuffled = train.shuffle(buffer_size=train.cardinality(), seed=87)
+    
+    train = train_shuffled.take(train_size)
+    print(f'Train size: {train_size} = {args.train_size_fraction} * {num_samples * .9}')
 
     # Adaptively set batch_size based on the train_size
     if train_size < 50:
@@ -73,9 +80,9 @@ def main():
     ])
 
     # Create save and log directories
-    save_dir = '../models/model_size_investigation'
-    model_path = f'{save_dir}/model_train_size_{args.train_size_percent}_{args.polarity}.keras'  # Must end with keras.
-    log_dir = f'../../tensorboard_logs/fit/model_train_size_{args.train_size_percent}_{args.polarity}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
+    save_dir = '../../models/model_size_investigation'
+    model_path = f'{save_dir}/model_{args.model_version}_train_size_{args.train_size_fraction}_{args.polarity}.keras'  # Must end with keras.
+    log_dir = f'../../../tensorboard_logs/fit/model_train_size_{args.train_size_fraction}_{args.polarity}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
     
     print("\nTensorboard log dir: ", log_dir)
     if not os.path.exists(save_dir):
@@ -108,9 +115,9 @@ def main():
     train_mae = model.evaluate(train)
     test_mae = model.evaluate(test)
 
-    save_file = f'{save_dir}/{args.polarity}.csv'
+    save_file = f'{save_dir}/{args.model_version}_{args.polarity}.csv'
     with open(save_file, 'a') as f:
-        f.write(f'{args.train_size_percent},{train_mae},{test_mae}\n')
+        f.write(f'{args.train_size_fraction},{train_mae},{test_mae}\n')
         print(f'Saved to {save_file}\n')
 
 if __name__ == '__main__':

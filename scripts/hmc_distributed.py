@@ -55,6 +55,7 @@ parser.add_argument('--file_version', type=str, default='2024')
 parser.add_argument('--integrate', type=str2bool, default=False)
 parser.add_argument('--par_equals_perr', type=str2bool, default=False)
 parser.add_argument('--constant_vspoles', type=str2bool, default=False)
+parser.add_argument('--train_size', type=float, default=1.0)
 args = parser.parse_args()
 
 # Select experiment parameters
@@ -65,7 +66,7 @@ df = df.iloc[SLURM_ARRAY_TASK_ID]
 # Setup  output directory.
 results_dir = f'../../results/{args.hmc_version}/'
 Path(results_dir).mkdir(parents=True, exist_ok=True)
-print(f'Running HMC version {args.hmc_version} on model version {args.model_version}. The results will be saved in {results_dir}.')
+print(f'Running HMC version {args.hmc_version} on model version {args.model_version} and train_size {args.train_size}. The results will be saved in {results_dir}.')
 
 # Load observation data and define logprob. 
 if args.file_version == '2023': 
@@ -76,7 +77,11 @@ elif args.file_version == '2024':
 else:
     raise ValueError(f"Invalid file_version {args.file_version}. Must be '2023' or '2024'.")
 
-model_path = f'../models/model_{args.model_version}_{df.polarity}.keras'
+# Load NN model
+if args.train_size < 1.0:
+    model_path = f'../models/model_{args.model_version}_size_investigation/model_train_size_{args.train_size}_{df.polarity}.keras'
+else:
+    model_path = f'../models/model_{args.model_version}_{df.polarity}.keras'
 
 # Define parameters for HMC
 seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
