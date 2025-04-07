@@ -36,16 +36,22 @@ def main():
 
     # Split
     full = Dataset.zip((x, y))
-    train = full.take(np.floor(num_samples *.9)) # Keep train set we sample from consistent as 90% of the data
+    full_train = full.take(np.floor(num_samples *.9)) # Keep train set we sample from consistent as 90% of the data
     test = full.skip(np.floor(num_samples *.9)) # Keep test set consistent as 10% of the data
 
     # Reduce train size based on the train_size_fraction
-    train_size = np.floor(num_samples *.9 * args.train_size_fraction)
     if args.model_version == 'v1':
-        train_shuffled = train.shuffle(buffer_size=train.cardinality(), seed=42)
+        train_shuffled = full_train.shuffle(buffer_size=full_train.cardinality(), seed=42)
     elif args.model_version == 'v2':
-        train_shuffled = train.shuffle(buffer_size=train.cardinality(), seed=87)
+        train_shuffled = full_train.shuffle(buffer_size=full_train.cardinality(), seed=87)
+    elif args.model_version == 'v3':
+        train_shuffled = full_train.shuffle(buffer_size=full_train.cardinality(), seed=5)
+    elif args.model_version == 'v4':
+        train_shuffled = full_train.shuffle(buffer_size=full_train.cardinality(), seed=98)
+    else:
+        train_shuffled = full_train
     
+    train_size = np.floor(num_samples *.9 * args.train_size_fraction)
     train = train_shuffled.take(train_size)
     print(f'Train size: {train_size} = {args.train_size_fraction} * {num_samples * .9}')
 
@@ -82,7 +88,7 @@ def main():
     # Create save and log directories
     save_dir = '../../models/model_size_investigation'
     model_path = f'{save_dir}/model_{args.model_version}_train_size_{args.train_size_fraction}_{args.polarity}.keras'  # Must end with keras.
-    log_dir = f'../../../tensorboard_logs/fit/model_train_size_{args.train_size_fraction}_{args.polarity}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
+    log_dir = f'../../../tensorboard_logs/fit/model_{args.model_version}_train_size_{args.train_size_fraction}_{args.polarity}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
     
     print("\nTensorboard log dir: ", log_dir)
     if not os.path.exists(save_dir):
@@ -92,7 +98,7 @@ def main():
     # Callbacks
     callbacks = [
         keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10),
-        keras.callbacks.EarlyStopping(monitor="val_loss", patience=20),
+        keras.callbacks.EarlyStopping(monitor="val_loss", patience=20, restore_best_weights=True),
         keras.callbacks.ModelCheckpoint(filepath=model_path, save_best_only=True, monitor='val_loss'),
         keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
     ]
