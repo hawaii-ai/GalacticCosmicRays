@@ -16,13 +16,13 @@
 #SBATCH --output=logs/hmc-train-size-analysis-%A_%a.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
 #SBATCH --mail-type=START,END,FAIL
 #SBATCH --mail-user=linneamw@hawaii.edu
-#SBATCH --begin=now+6hours ## 12 hours from now
+#SBATCH --begin=now+56hours ## 6 hours from now
 
 echo This is job $SLURM_ARRAY_JOB_ID task $SLURM_ARRAY_TASK_ID running on $HOSTNAME
 echo $(date +%F-%H-%M-%S)
 echo Running hmc_version $HMC_VERSION with train_size $TRAIN_SIZE and model_version $MODEL_VERSION
 
-# Load python profile, the`n call python script passing SLURM_ARRAY_TASK_ID as an argument.
+# Load python profile, then call python script passing SLURM_ARRAY_TASK_ID as an argument.
 source ~/profiles/auto.profile
 conda activate gcr
 

@@ -54,7 +54,9 @@ file_version = os.getenv('FILE_VERSION', default='2024')
 integrate = str2bool(os.getenv('INTEGRATE', default=False))
 par_equals_perr = str2bool(os.getenv('PAR_EQUALS_PERR', default=False))
 constant_vspoles = str2bool(os.getenv('CONSTANT_VSPOLES', default=False))
-train_size = float(os.getenv('TRAIN_SIZE', default=1.0))
+train_size_env = os.getenv('TRAIN_SIZE', default=None)
+train_size = float(train_size_env) if train_size_env is not None else None
+bootstrap = str2bool(os.getenv('BOOTSTRAP', default=False))
 
 # Select experiment parameters
 df = utils.index_mcmc_runs(file_version=file_version)  # List of all experiments (0-209) for '2023', 0-14 for '2024'
@@ -76,8 +78,11 @@ else:
     raise ValueError(f"Invalid file_version {file_version}. Must be '2023' or '2024'.")
 
 # Load NN model
-if train_size < 1.0:
-    model_path = f'../models/model_size_investigation/model_{model_version}_train_size_{train_size}_{df.polarity}.keras'
+if train_size is not None:
+    if bootstrap:
+        model_path = f'../models/model_size_investigation_bootstrap/model_{model_version}_train_size_{train_size}_{df.polarity}.keras'
+    else:
+        model_path = f'../models/model_size_investigation/model_{model_version}_train_size_{train_size}_{df.polarity}.keras'
 else:
     model_path = f'../models/model_{model_version}_{df.polarity}.keras'
 

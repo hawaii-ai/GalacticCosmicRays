@@ -21,6 +21,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--polarity', type=str, help='The polarity of the data to train on. Either pos or neg.')
     parser.add_argument('--train_size_fraction', type=float, help='The fraction of the training data to use. Must be between 0 and 1.')
+    parser.add_argument('--bootstrap', action='store_true', help='Whether to use bootstrap sampling. If passed, bootstrapping, else no bootstrapping.')
     parser.add_argument('--model_version', type=str, default='v0', help='The version of the model to use. Default is v0, so no shuffling of train set (take first x% of the train set)')
     args = parser.parse_args()
 
@@ -36,34 +37,60 @@ def main():
 
     # Split
     full = Dataset.zip((x, y))
-    full_train = full.take(np.floor(num_samples *.9)) # Keep train set we sample from consistent as 90% of the data
-    test = full.skip(np.floor(num_samples *.9)) # Keep test set consistent as 10% of the data
+    train_cardinality = np.floor(num_samples * .9)
+    full_train = full.take(train_cardinality) # Keep train set we sample from consistent as 90% of the data
+    test = full.skip(train_cardinality) # Keep test set consistent as 10% of the data
 
-    # Reduce train size based on the train_size_fraction
-    if args.model_version == 'v1':
-        train_shuffled = full_train.shuffle(buffer_size=full_train.cardinality(), seed=42)
-    elif args.model_version == 'v2':
-        train_shuffled = full_train.shuffle(buffer_size=full_train.cardinality(), seed=87)
-    elif args.model_version == 'v3':
-        train_shuffled = full_train.shuffle(buffer_size=full_train.cardinality(), seed=5)
-    elif args.model_version == 'v4':
-        train_shuffled = full_train.shuffle(buffer_size=full_train.cardinality(), seed=98)
+    # Get number of training samples (from the dataset)
+    train_size = int(np.floor(train_cardinality * args.train_size_fraction))
+    print(f'Train size: {train_size} = {args.train_size_fraction} * {train_cardinality}')
+
+    # Choose seed based on model version
+    model_seeds = {
+        'v1': 42,
+        'v1.1': 42, # to double check training a new model on same data is what we expect
+        'v2': 87,
+        'v3': 5,
+        'v4': 98,
+    }
+    seed = model_seeds.get(args.model_version, None)
+
+    if args.bootstrap:
+        print("Using bootstrap sampling (with replacement)")
+
+        # Reproducible bootstrap indices
+        rng = np.random.default_rng(seed)
+        sampled_indices = rng.integers(low=0, high=train_cardinality, size=train_size)
+
+        # Load dataset into memory
+        train_list = list(full_train.as_numpy_iterator())
+
+        # Sample with replacement
+        bootstrapped_data = [train_list[i] for i in sampled_indices]
+
+        # Separate into inputs and outputs
+        x_bootstrap, y_bootstrap = zip(*bootstrapped_data)
+
+        # Convert back to tf.data.Dataset
+        train = Dataset.from_tensor_slices((list(x_bootstrap), list(y_bootstrap)))
+
     else:
-        train_shuffled = full_train
-    
-    train_size = np.floor(num_samples *.9 * args.train_size_fraction)
-    train = train_shuffled.take(train_size)
-    print(f'Train size: {train_size} = {args.train_size_fraction} * {num_samples * .9}')
+        print("Using traditional sampling (without replacement)")
 
-    # Adaptively set batch_size based on the train_size
-    if train_size < 50:
-        batch_size = 8
-    elif train_size < 100:
-        batch_size = 16
-    elif train_size < 500:
-        batch_size = 32
-    elif train_size < 1000:
-        batch_size = 64
+        # Shuffle deterministically
+        if args.model_version in model_seeds:
+            train_shuffled = full_train.shuffle(
+                buffer_size=train_cardinality, seed=seed, reshuffle_each_iteration=False
+            )
+        else:
+            train_shuffled = full_train
+
+        # Take subset without replacement
+        train = train_shuffled.take(train_size)
+
+    # Set batch_size to 128 unless the train size is smaller than 128, then set it to the train size.
+    if train_size < 128:
+        batch_size = train_size
     else:
         batch_size = 128
     print(f'Setting batch size: {batch_size}')
@@ -86,9 +113,13 @@ def main():
     ])
 
     # Create save and log directories
-    save_dir = '../../models/model_size_investigation'
+    if args.bootstrap:
+        save_dir = '../../models/model_size_investigation_bootstrap'
+    else:
+        save_dir = '../../models/model_size_investigation'
+
     model_path = f'{save_dir}/model_{args.model_version}_train_size_{args.train_size_fraction}_{args.polarity}.keras'  # Must end with keras.
-    log_dir = f'../../../tensorboard_logs/fit/model_{args.model_version}_train_size_{args.train_size_fraction}_{args.polarity}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
+    log_dir = f'../../../tensorboard_logs/fit/model_{args.model_version}_bootstrap_{args.bootstrap}_train_size_{args.train_size_fraction}_{args.polarity}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
     
     print("\nTensorboard log dir: ", log_dir)
     if not os.path.exists(save_dir):
@@ -98,7 +129,7 @@ def main():
     # Callbacks
     callbacks = [
         keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10),
-        keras.callbacks.EarlyStopping(monitor="val_loss", patience=20, restore_best_weights=True),
+        # keras.callbacks.EarlyStopping(monitor="val_loss", patience=20, restore_best_weights=True),
         keras.callbacks.ModelCheckpoint(filepath=model_path, save_best_only=True, monitor='val_loss'),
         keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
     ]
@@ -109,7 +140,7 @@ def main():
 
     history = model.fit(
         train,
-        epochs=100,
+        epochs=1_000,
         steps_per_epoch=steps_per_epoch,
         validation_data=test,
         shuffle=False,
