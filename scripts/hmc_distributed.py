@@ -49,6 +49,7 @@ def str2bool(v):
 
 
 model_version = os.getenv('MODEL_VERSION', default='v3.0')
+data_version = os.getenv('DATA_VERSION', default='d1')
 hmc_version = os.getenv('HMC_VERSION', default='v25.0')
 file_version = os.getenv('FILE_VERSION', default='2024')
 integrate = str2bool(os.getenv('INTEGRATE', default=False))
@@ -56,7 +57,7 @@ par_equals_perr = str2bool(os.getenv('PAR_EQUALS_PERR', default=False))
 constant_vspoles = str2bool(os.getenv('CONSTANT_VSPOLES', default=False))
 train_size_env = os.getenv('TRAIN_SIZE', default=None)
 train_size = float(train_size_env) if train_size_env is not None else None
-bootstrap = str2bool(os.getenv('BOOTSTRAP', default=False))
+bootstrap = os.getenv('BOOTSTRAP', default='b0')
 
 # Select experiment parameters
 df = utils.index_mcmc_runs(file_version=file_version)  # List of all experiments (0-209) for '2023', 0-14 for '2024'
@@ -79,10 +80,10 @@ else:
 
 # Load NN model
 if train_size is not None:
-    if bootstrap:
-        model_path = f'../models/model_size_investigation_bootstrap/model_{model_version}_train_size_{train_size}_{df.polarity}.keras'
-    else:
-        model_path = f'../models/model_size_investigation/model_{model_version}_train_size_{train_size}_{df.polarity}.keras'
+    save_dir = '../models/model_size_investigation_shuffled_traintest'
+    save_name = f'data_{data_version}_bootstrap_{bootstrap}_model_{model_version}_train_size_{train_size}_{df.polarity}'
+    model_path = f'{save_dir}/{save_name}.keras'  # Must end with keras.
+    print(f'Loading model from {model_path}.')
 else:
     model_path = f'../models/model_{model_version}_{df.polarity}.keras'
 

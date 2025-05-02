@@ -25,6 +25,8 @@ PARAMETERS_SPECIFIED_MAX = np.array([85., 9.5, 700.])
 # Calculated from positive file, used for both.
 Y_LOG_MAX = 8.815241
 
+NN_SPLIT_SEED = 36 # Random seed for splitting data into train/test sets for reproducibiity. Buffer size must be the same as num_samples.
+
 # Now there are only 32 rigidity values.
 # filename = f'{path}/{polarity}/model_collection_1AU_90deg_0deg_fixed.h5'
 # with h5py.File(filename,'r') as f:

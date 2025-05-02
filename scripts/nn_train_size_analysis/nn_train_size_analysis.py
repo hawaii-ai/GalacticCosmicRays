@@ -16,13 +16,16 @@ import tensorflow_io as tfio
 from tensorflow.data import Dataset
 from tensorflow.data.experimental import AUTOTUNE
 
+SPLIT_SEED = 36
+
 def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--polarity', type=str, help='The polarity of the data to train on. Either pos or neg.')
     parser.add_argument('--train_size_fraction', type=float, help='The fraction of the training data to use. Must be between 0 and 1.')
-    parser.add_argument('--bootstrap', action='store_true', help='Whether to use bootstrap sampling. If passed, bootstrapping, else no bootstrapping.')
-    parser.add_argument('--model_version', type=str, default='v0', help='The version of the model to use. Default is v0, so no shuffling of train set (take first x% of the train set)')
+    parser.add_argument('--bootstrap', type=str, default='b0', help='Whether to use bootstrap sampling. If b0, then no bootstrap sampling. If b1, then bootstrap sampling.')
+    parser.add_argument('--model_version', type=str, default='init0', help='The version of the model to use. Normally init0, but can be init1, init2, etc. to test different initializations.')
+    parser.add_argument('--data_version', type=str, default='d1', help='The version of the data seed to use. Default is d1, so just seed = 42.')
     args = parser.parse_args()
 
     data_path = '/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/2023_07_01'
@@ -36,7 +39,9 @@ def main():
     y = tfio.IODataset.from_hdf5(data_file, dataset='/Y_log_scaled')
 
     # Split
-    full = Dataset.zip((x, y))
+    full = Dataset.zip((x, y)).shuffle(
+        buffer_size=num_samples, seed=SPLIT_SEED, reshuffle_each_iteration=False
+    ) # Shuffle the dataset. Important to use the same seed and buffer_size
     train_cardinality = np.floor(num_samples * .9)
     full_train = full.take(train_cardinality) # Keep train set we sample from consistent as 90% of the data
     test = full.skip(train_cardinality) # Keep test set consistent as 10% of the data
@@ -46,20 +51,19 @@ def main():
     print(f'Train size: {train_size} = {args.train_size_fraction} * {train_cardinality}')
 
     # Choose seed based on model version
-    model_seeds = {
-        'v1': 42,
-        'v1.1': 42, # to double check training a new model on same data is what we expect
-        'v2': 87,
-        'v3': 5,
-        'v4': 98,
+    data_seeds = {
+        'd1': 42,
+        'd2': 87,
+        'd3': 5,
+        'd4': 98,
     }
-    seed = model_seeds.get(args.model_version, None)
+    data_seed = data_seeds.get(args.data_version, None)
 
-    if args.bootstrap:
-        print("Using bootstrap sampling (with replacement)")
+    if args.bootstrap == 'b1':
+        print(f"Using bootstrap sampling (with replacement) for data version {args.data_version} and seed {data_seed}")
 
         # Reproducible bootstrap indices
-        rng = np.random.default_rng(seed)
+        rng = np.random.default_rng(data_seed)
         sampled_indices = rng.integers(low=0, high=train_cardinality, size=train_size)
 
         # Load dataset into memory
@@ -75,12 +79,12 @@ def main():
         train = Dataset.from_tensor_slices((list(x_bootstrap), list(y_bootstrap)))
 
     else:
-        print("Using traditional sampling (without replacement)")
+        print(f"Using traditional sampling (without replacement) for data version {args.data_version} and seed {data_seed}")
 
         # Shuffle deterministically
-        if args.model_version in model_seeds:
+        if args.data_version in data_seeds:
             train_shuffled = full_train.shuffle(
-                buffer_size=train_cardinality, seed=seed, reshuffle_each_iteration=False
+                buffer_size=train_cardinality, seed=data_seed, reshuffle_each_iteration=False
             )
         else:
             train_shuffled = full_train
@@ -113,13 +117,11 @@ def main():
     ])
 
     # Create save and log directories
-    if args.bootstrap:
-        save_dir = '../../models/model_size_investigation_bootstrap'
-    else:
-        save_dir = '../../models/model_size_investigation'
+    save_dir = '../../models/model_size_investigation_shuffled_traintest'
+    save_name = f'data_{args.data_version}_bootstrap_{args.bootstrap}_model_{args.model_version}_train_size_{args.train_size_fraction}_{args.polarity}'
 
-    model_path = f'{save_dir}/model_{args.model_version}_train_size_{args.train_size_fraction}_{args.polarity}.keras'  # Must end with keras.
-    log_dir = f'../../../tensorboard_logs/fit/model_{args.model_version}_bootstrap_{args.bootstrap}_train_size_{args.train_size_fraction}_{args.polarity}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
+    model_path = f'{save_dir}/{save_name}.keras'  # Must end with keras.
+    log_dir = f'../../../tensorboard_logs/shuffled_traintest/{save_name}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
     
     print("\nTensorboard log dir: ", log_dir)
     if not os.path.exists(save_dir):
@@ -152,7 +154,7 @@ def main():
     train_mae = model.evaluate(train)
     test_mae = model.evaluate(test)
 
-    save_file = f'{save_dir}/{args.model_version}_{args.polarity}.csv'
+    save_file = f'{save_dir}/data_{args.data_version}_bootstrap_{args.bootstrap}_model_{args.model_version}_{args.polarity}.csv'
     with open(save_file, 'a') as f:
         f.write(f'{args.train_size_fraction},{train_mae},{test_mae}\n')
         print(f'Saved to {save_file}\n')
