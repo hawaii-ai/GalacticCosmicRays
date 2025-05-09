@@ -25,3 +25,11 @@ wheels/
 .installed.cfg
 *.egg
 
+# Slurm log files
+scripts/logs/
+logs/
+
+# Models
+models/predictions*
+models/model_size_investigation
+*.keras
