@@ -26,7 +26,10 @@ def main():
     parser.add_argument('--bootstrap', type=str, default='b0', help='Whether to use bootstrap sampling. If b0, then no bootstrap sampling. If b1, then bootstrap sampling.')
     parser.add_argument('--model_version', type=str, default='init0', help='The version of the model to use. Normally init0, but can be init1, init2, etc. to test different initializations.')
     parser.add_argument('--data_version', type=str, default='d1', help='The version of the data seed to use. Default is d1, so just seed = 42.')
+    parser.add_argument('--regularizer', type=float, default='1e-6', help='The ls regularization to apply to each layer. Default is 1e-6.')
     args = parser.parse_args()
+
+    print(f'Polarity: {args.polarity}, Train size fraction: {args.train_size_fraction}, Bootstrap: {args.bootstrap}, Model version: {args.model_version}, Data version: {args.data_version}, Regularizer: {args.regularizer}')
 
     data_path = '/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/2023_07_01'
     data_file = f'{data_path}/{args.polarity}/model_collection_1AU_90deg_0deg_fixed_training.h5'
@@ -108,7 +111,7 @@ def main():
     print(f'Steps per epoch: {steps_per_epoch}, validation steps: {validation_steps}')
 
     # Define model. 
-    l2 = keras.regularizers.L2(l2=1e-6)
+    l2 = keras.regularizers.L2(l2=args.regularizer)
     model = keras.Sequential(layers=[
         keras.layers.Input(shape=(8,)),
         keras.layers.Dense(256, activation='selu', kernel_regularizer=l2),
@@ -117,16 +120,20 @@ def main():
     ])
 
     # Create save and log directories
-    save_dir = '../../models/model_size_investigation_shuffled_traintest'
+    save_dir = f'../../models/model_size_investigation_regularized_{args.regularizer}'
     save_name = f'data_{args.data_version}_bootstrap_{args.bootstrap}_model_{args.model_version}_train_size_{args.train_size_fraction}_{args.polarity}'
 
     model_path = f'{save_dir}/{save_name}.keras'  # Must end with keras.
-    log_dir = f'../../../tensorboard_logs/shuffled_traintest/{save_name}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
-    
+    log_dir = f'../../../tensorboard_logs/new_regularized_{args.regularizer}/{save_name}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
     print("\nTensorboard log dir: ", log_dir)
+
     if not os.path.exists(save_dir):
         print(f'Creating directory: {save_dir}')
         os.makedirs(save_dir)
+
+    if not os.path.exists(log_dir):
+        print(f'Creating directory: {log_dir}')
+        os.makedirs(log_dir)
 
     # Callbacks
     callbacks = [
