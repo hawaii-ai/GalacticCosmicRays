@@ -12,6 +12,9 @@ Analysis notebooks.
 /scripts
 Python scripts for data processing and model training.
 
+/models
+Trained models.
+
 HMC python file was originally inspired by this example:
 https://colab.research.google.com/github/tensorflow/probability/blob/master/spinoffs/oryx/examples/notebooks/probabilistic_programming.ipynb#scrollTo=nmjmxzGhN855
 

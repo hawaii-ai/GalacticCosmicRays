@@ -33,3 +33,7 @@ logs/
 models/predictions*
 models/model_size_investigation
 *.keras
+
+# Data
+*.h5
+*.csv
