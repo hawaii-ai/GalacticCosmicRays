@@ -1,17 +1,9 @@
-"""
-Train both the positive and negative NN with varying amounts of the training data to determine the effect of training data size on the model performance.
-"""
-# Imports
 import os
-from collections import defaultdict
-import numpy as np
-import h5py
-import matplotlib.pyplot as plt
 import datetime
-import argparse
-
+import h5py
+import numpy as np
+import optuna
 import keras_core as keras
-
 import tensorflow_io as tfio
 from tensorflow.data import Dataset
 from tensorflow.data.experimental import AUTOTUNE
@@ -92,84 +84,62 @@ def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
 
     return train, test, train_size, num_test_samples, batch_size
 
-def build_model(n_layers, n_units):
+def build_model(trial):
+    n_layers = trial.suggest_int("n_layers", 2, 10)
+    units = trial.suggest_categorical("units", [256, 512])
+    print(f"Trial {trial.number}: Building model with {n_layers} layers and {units} units per layer")
+
     model = keras.Sequential()
     model.add(keras.Input(shape=(8,)))
     for _ in range(n_layers):
-        model.add(keras.layers.Dense(n_units, activation="selu"))
+        model.add(keras.layers.Dense(units, activation="selu"))
     model.add(keras.layers.Dense(32, activation="linear"))
 
     return model
 
-def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--polarity', type=str, help='The polarity of the data to train on. Either pos or neg.')
-    parser.add_argument('--train_size_fraction', type=float, help='The fraction of the training data to use. Must be between 0 and 1.')
-    parser.add_argument('--bootstrap', type=str, default='b0', help='Whether to use bootstrap sampling. If b0, then no bootstrap sampling. If b1, then bootstrap sampling.')
-    parser.add_argument('--model_version', type=str, default='init0', help='The version of the model to use. Normally init0, but can be init1, init2, etc. to test different initializations.')
-    parser.add_argument('--data_version', type=str, default='d1', help='The version of the data seed to use. Default is d1, so just seed = 42.')
-    parser.add_argument('--regularizer', type=float, default='1e-6', help='The ls regularization to apply to each layer. Default is 1e-6.')
-    args = parser.parse_args()
+def objective(trial):
+    print(f"Starting trial {trial.number} at {datetime.datetime.now()} -----------------------")
 
-    print(f'Polarity: {args.polarity}, Train size fraction: {args.train_size_fraction}, Bootstrap: {args.bootstrap}, Model version: {args.model_version}, Data version: {args.data_version}')
+    # Fixed args – customize if needed
+    args = {
+        "polarity": "neg",
+        "train_size_fraction": 1.0,
+        "bootstrap": "b0",
+        "data_version": "d1"
+    }
+
+    # Sample hyperparameters
+    learning_rate = trial.suggest_float("learning_rate", 1e-6, 1e-2, log=True)
+    weight_decay = trial.suggest_float("weight_decay", 1e-9, 1e-3, log=True)
+    print(f"Trial {trial.number}: Learning rate: {learning_rate}, Weight decay: {weight_decay}")
 
     train, test, train_size, num_test_samples, batch_size = load_dataset(
-        polarity=args.polarity,
-        bootstrap=args.bootstrap,
-        data_version=args.data_version, 
-        train_size_fraction=args.train_size_fraction
+        args["polarity"], args["data_version"], args["train_size_fraction"], args["bootstrap"]
     )
 
     # Some calcs
     steps_per_epoch = train_size // batch_size
     validation_steps = num_test_samples // batch_size
 
-    # Create save and log directories
-    save_dir = f'../../models/model_size_investigation_best_optuna'
-    save_name = f'data_{args.data_version}_bootstrap_{args.bootstrap}_model_{args.model_version}_train_size_{args.train_size_fraction}_{args.polarity}'
-
-    model_path = f'{save_dir}/{save_name}.keras'  # Must end with keras.
-    log_dir = f'../../../tensorboard_logs/best_optuna/{save_name}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
-    print("\nTensorboard log dir: ", log_dir)
-
-    if not os.path.exists(save_dir):
-        print(f'Creating directory: {save_dir}')
-        os.makedirs(save_dir)
-
-    if not os.path.exists(log_dir):
-        print(f'Creating directory: {log_dir}')
-        os.makedirs(log_dir)
-
-    # Model hyperparameters
-    learning_rate = 0.00022980039783654274
-    weight_decay = 0.00017441363447582997
-    n_layers = 4
-    n_units = 512
-
-    # Callbacks
-    callbacks = [
-        keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10),
-        # keras.callbacks.EarlyStopping(monitor="val_loss", patience=20, restore_best_weights=True),
-        keras.callbacks.ModelCheckpoint(filepath=model_path, save_best_only=True, monitor='val_loss'),
-        keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
-    ]
-
     # Define model and compile
-    model = build_model(n_layers=n_layers, n_units=n_units)
+    model = build_model(trial)
+
     optimizer = keras.optimizers.AdamW(learning_rate=learning_rate, weight_decay=weight_decay)
     model.compile(optimizer=optimizer, loss='mae', metrics=['mse'])
 
     # Train
     history = model.fit(
         train,
-        epochs=1_000,
+        epochs=150,
         validation_data=test,
         steps_per_epoch=steps_per_epoch,
         validation_steps=validation_steps,
         shuffle=False,
         verbose=2,
-        callbacks=callbacks
+        callbacks=[
+            keras.callbacks.EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True),
+            keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=10),
+        ]
     )
 
     # Evaluate on train
@@ -182,15 +152,14 @@ def main():
     test_mae = test_results[0]
     test_mse = test_results[1]
 
-    print(f"Train MAE: {train_mae}, Train MSE: {train_mse}")
-    print(f"Test MAE: {test_mae}, Test MSE: {test_mse}")
+    print(f"Trial {trial.number}: Train MAE: {train_mae}, Train MSE: {train_mse}")
+    print(f"Trial {trial.number}: Test MAE: {test_mae}, Test MSE: {test_mse}")
 
-    # Save the performance on the train and test set
-    save_file = f'{save_dir}/data_{args.data_version}_bootstrap_{args.bootstrap}_model_{args.model_version}_{args.polarity}_mae_mse.csv'
-    with open(save_file, 'a') as f:
-        f.write(f'{args.train_size_fraction},{train_mae},{train_mse},{test_mae},{test_mse}\n')
-        print(f'Saved to {save_file}\n')
+    return test_mae
 
+if __name__ == "__main__":
+    study = optuna.create_study(direction="minimize")
+    study.optimize(objective, n_trials=60, n_jobs=2)
 
-if __name__ == '__main__':
-    main()
+    print("Best trial:")
+    print(study.best_trial)
