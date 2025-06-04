@@ -5,18 +5,18 @@
 #SBATCH --partition=shared # koa, sadow, gpu, shared, kill-shared, exclusive-long
 ##SBATCH --account=sadow
 
-#SBATCH --array=24,100 #0-132 ## Negative intervals only 0-132 and for new yearly data that's 0-14, for old data negative + positive intervals it's 0-209
+#SBATCH --array=0-132 ## Negative intervals only 0-132 and for new yearly data that's 0-14, for old data negative + positive intervals it's 0-209
 ##BATCH --gres=gpu:1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=6gb ## max amount of memory per node you require
+#SBATCH --mem=7gb ## max amount of memory per node you require
 #SBATCH --time=3-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on exclusive-long, 14day max on sadow, 30day max on koa
 
-#SBATCH --job-name=hmc3e-5 ## Job name
+#SBATCH --job-name=best_hmc ## Job name
 #SBATCH --output=job.out
-#SBATCH --output=logs/hmc-regularizer-1e-4-%A_%a.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
+#SBATCH --output=logs/hmc-best-optuna-%A_%a.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
 #SBATCH --mail-type=START,END,FAIL
 #SBATCH --mail-user=linneamw@hawaii.edu
-##SBATCH --begin=now+12hour ## x hours from now
+#SBATCH --begin=now+48hour ## x hours from now
 
 echo This is job $SLURM_ARRAY_JOB_ID task $SLURM_ARRAY_TASK_ID running on $HOSTNAME
 echo $(date +%F-%H-%M-%S)

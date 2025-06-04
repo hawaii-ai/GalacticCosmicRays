@@ -13,6 +13,8 @@
 #SBATCH --output=./logs/optuna-%A.out
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=linneamw@hawaii.edu
+#SBATCH --begin=now+48hour ## x hours from now
+
 # Load python profile, then call python script passing SLURM_ARRAY_TASK_ID as an argument.
 source ~/profiles/auto.profile
 source activate gcr

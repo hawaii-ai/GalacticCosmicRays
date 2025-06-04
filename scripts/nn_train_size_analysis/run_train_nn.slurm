@@ -7,7 +7,7 @@
 ##SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=18gb ## max amount of memory per node you require
-#SBATCH --time=01-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on sadow
+#SBATCH --time=02-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on sadow
 
 #SBATCH --job-name=nn_besthp
 #SBATCH --output=./logs/optuna-trial42-%A.out

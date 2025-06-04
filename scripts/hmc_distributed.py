@@ -58,7 +58,6 @@ constant_vspoles = str2bool(os.getenv('CONSTANT_VSPOLES', default=False))
 train_size_env = os.getenv('TRAIN_SIZE', default=None)
 train_size = float(train_size_env) if train_size_env is not None else None
 bootstrap = os.getenv('BOOTSTRAP', default='b0')
-regularizer = float(os.getenv('REGULARIZER', default='1e-6'))
 
 # Select experiment parameters
 df = utils.index_mcmc_runs(file_version=file_version)  # List of all experiments (0-209) for '2023', 0-14 for '2024'
@@ -81,7 +80,7 @@ else:
 
 # Load NN model
 if train_size is not None:
-    save_dir = f'../models/model_size_investigation_regularized_{regularizer}'
+    save_dir = f'../models/model_size_investigation_best_optuna'
     save_name = f'data_{data_version}_bootstrap_{bootstrap}_model_{model_version}_train_size_{train_size}_{df.polarity}'
     model_path = f'{save_dir}/{save_name}.keras'  # Must end with keras.
     print(f'Loading model from {model_path}.')

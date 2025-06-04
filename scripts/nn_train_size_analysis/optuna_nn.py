@@ -85,8 +85,8 @@ def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
     return train, test, train_size, num_test_samples, batch_size
 
 def build_model(trial):
-    n_layers = trial.suggest_int("n_layers", 2, 10)
-    units = trial.suggest_categorical("units", [256, 512])
+    n_layers = trial.suggest_int("n_layers", 3, 5)
+    units = trial.suggest_categorical("units", [512, 1024, 2048])
     print(f"Trial {trial.number}: Building model with {n_layers} layers and {units} units per layer")
 
     model = keras.Sequential()
@@ -159,7 +159,7 @@ def objective(trial):
 
 if __name__ == "__main__":
     study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=60, n_jobs=2)
+    study.optimize(objective, n_trials=100, n_jobs=2)
 
     print("Best trial:")
     print(study.best_trial)
