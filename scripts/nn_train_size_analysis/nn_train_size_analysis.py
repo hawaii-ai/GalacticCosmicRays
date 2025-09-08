@@ -110,6 +110,7 @@ def main():
     parser.add_argument('--model_version', type=str, default='init0', help='The version of the model to use. Normally init0, but can be init1, init2, etc. to test different initializations.')
     parser.add_argument('--data_version', type=str, default='d1', help='The version of the data seed to use. Default is d1, so just seed = 42.')
     parser.add_argument('--regularizer', type=float, default='1e-6', help='The ls regularization to apply to each layer. Default is 1e-6.')
+    parser.add_argument('--save_dir', type=str, default='../../models/model_size_investigation', help='The directory to save the model and training history to.')
     args = parser.parse_args()
 
     print(f'Polarity: {args.polarity}, Train size fraction: {args.train_size_fraction}, Bootstrap: {args.bootstrap}, Model version: {args.model_version}, Data version: {args.data_version}')
@@ -126,26 +127,25 @@ def main():
     validation_steps = num_test_samples // batch_size
 
     # Create save and log directories
-    save_dir = f'../../models/model_size_investigation_best_optuna'
     save_name = f'data_{args.data_version}_bootstrap_{args.bootstrap}_model_{args.model_version}_train_size_{args.train_size_fraction}_{args.polarity}'
 
-    model_path = f'{save_dir}/{save_name}.keras'  # Must end with keras.
+    model_path = f'{args.save_dir}/{save_name}.keras'  # Must end with keras.
     log_dir = f'../../../tensorboard_logs/best_optuna/{save_name}/{datetime.datetime.now().strftime("%Y%m%d-%H%M%S")}'
     print("\nTensorboard log dir: ", log_dir)
 
-    if not os.path.exists(save_dir):
-        print(f'Creating directory: {save_dir}')
-        os.makedirs(save_dir)
+    if not os.path.exists(args.save_dir):
+        print(f'Creating directory: {args.save_dir}')
+        os.makedirs(args.save_dir)
 
     if not os.path.exists(log_dir):
         print(f'Creating directory: {log_dir}')
         os.makedirs(log_dir)
 
     # Model hyperparameters
-    learning_rate = 0.00022980039783654274
-    weight_decay = 0.00017441363447582997
-    n_layers = 4
-    n_units = 512
+    learning_rate = 1.918416336823577e-05
+    weight_decay = 3.251785236175247e-06
+    n_layers = 10
+    n_units = 1024
 
     # Callbacks
     callbacks = [
@@ -186,7 +186,7 @@ def main():
     print(f"Test MAE: {test_mae}, Test MSE: {test_mse}")
 
     # Save the performance on the train and test set
-    save_file = f'{save_dir}/data_{args.data_version}_bootstrap_{args.bootstrap}_model_{args.model_version}_{args.polarity}_mae_mse.csv'
+    save_file = f'{args.save_dir}/data_{args.data_version}_bootstrap_{args.bootstrap}_model_{args.model_version}_{args.polarity}_mae_mse.csv'
     with open(save_file, 'a') as f:
         f.write(f'{args.train_size_fraction},{train_mae},{train_mse},{test_mae},{test_mse}\n')
         print(f'Saved to {save_file}\n')

@@ -7,6 +7,15 @@ import keras_core as keras
 import tensorflow_io as tfio
 from tensorflow.data import Dataset
 from tensorflow.data.experimental import AUTOTUNE
+from optuna.storages import JournalStorage, JournalFileStorage
+
+from GalacticCosmicRays.scripts.nn_train_size_analysis.rtdl_num_embeddings_tf import (
+    LinearEmbeddings,
+    LinearReLUEmbeddings,
+    PeriodicEmbeddings,
+    PiecewiseLinearEmbeddings,
+    compute_bins,
+)
 
 def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
     # 8 input parameters for the NN: alpha, cmf, vspoles, cpa, pwr1par, pwr2par, pwr1perr, and pwr2perr.
@@ -84,13 +93,44 @@ def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
 
     return train, test, train_size, num_test_samples, batch_size
 
-def build_model(trial):
-    n_layers = trial.suggest_int("n_layers", 3, 5)
-    units = trial.suggest_categorical("units", [512, 1024, 2048])
-    print(f"Trial {trial.number}: Building model with {n_layers} layers and {units} units per layer")
+def build_model(trial, x_train):
+    n_layers = trial.suggest_int("n_layers", 3, 10)
+    units = trial.suggest_categorical("units", [512, 1024, 2048, 4096])
+    embedding_method = trial.suggest_categorical("embedding_method", [
+        "none",
+        "linear_relu",
+        "periodic",
+        "piecewise_linear_relu"
+    ])
+    print(f"Trial {trial.number}: Building model with embedding {embedding_method}, {n_layers} layers, and {units} units per layer")
 
     model = keras.Sequential()
-    model.add(keras.Input(shape=(8,)))
+
+    # Implement embedding method
+    input_dim = 8
+    embed_dim = 12
+    n_bins = 48
+
+    model.add(keras.Input(shape=(input_dim,)))
+
+    if embedding_method == "linear":
+        model.add(LinearEmbeddings(input_dim, embed_dim))
+        model.add(keras.layers.Flatten())
+    elif embedding_method == "linear_relu":
+        model.add(LinearReLUEmbeddings(input_dim, embed_dim))
+        model.add(keras.layers.Flatten())
+    elif embedding_method == "periodic":
+        model.add(PeriodicEmbeddings(input_dim, embed_dim))
+        model.add(keras.layers.Flatten())
+    elif embedding_method == "piecewise_linear":
+        bins = compute_bins(x_train, n_bins)
+        model.add(PiecewiseLinearEmbeddings(input_dim, embed_dim, activation=False, version="B"))
+        model.add(keras.layers.Flatten())
+    elif embedding_method == "piecewise_linear_relu":
+        bins = compute_bins(x_train, n_bins)
+        model.add(PiecewiseLinearEmbeddings(input_dim, embed_dim, activation=True, version="B"))
+        model.add(keras.layers.Flatten())
+
     for _ in range(n_layers):
         model.add(keras.layers.Dense(units, activation="selu"))
     model.add(keras.layers.Dense(32, activation="linear"))
@@ -121,8 +161,18 @@ def objective(trial):
     steps_per_epoch = train_size // batch_size
     validation_steps = num_test_samples // batch_size
 
+    # Get x_final_train from the zipped and shuffled and batched train
+    # Collect all batches into memory
+    x_batches = []
+    for x_batch, _ in train:   # iterate through the dataset
+        x_batches.append(x_batch.numpy())  # convert to numpy
+
+    # Concatenate into a single array
+    x_final_train = np.concatenate(x_batches, axis=0)
+    x_final_train_tensor = 
+
     # Define model and compile
-    model = build_model(trial)
+    model = build_model(trial, x_final_train)
 
     optimizer = keras.optimizers.AdamW(learning_rate=learning_rate, weight_decay=weight_decay)
     model.compile(optimizer=optimizer, loss='mae', metrics=['mse'])
@@ -158,8 +208,15 @@ def objective(trial):
     return test_mae
 
 if __name__ == "__main__":
-    study = optuna.create_study(direction="minimize")
-    study.optimize(objective, n_trials=100, n_jobs=2)
+    save_dir = "./../../../optuna"
+    storage = JournalStorage(
+        JournalFileStorage(
+            f"{save_dir}/opt_journal.log"
+        )
+    )
+
+    study = optuna.create_study(direction="minimize", storage=storage, load_if_exists=True,)
+    study.optimize(objective, n_trials=500, n_jobs=1)
 
     print("Best trial:")
     print(study.best_trial)

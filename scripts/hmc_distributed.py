@@ -80,7 +80,7 @@ else:
 
 # Load NN model
 if train_size is not None:
-    save_dir = f'../models/model_size_investigation_best_optuna'
+    save_dir = f'../models/model_size_investigation_optuna_07292025' # Remember to update!
     save_name = f'data_{data_version}_bootstrap_{bootstrap}_model_{model_version}_train_size_{train_size}_{df.polarity}'
     model_path = f'{save_dir}/{save_name}.keras'  # Must end with keras.
     print(f'Loading model from {model_path}.')

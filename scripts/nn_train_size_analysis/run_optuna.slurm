@@ -4,7 +4,7 @@
 #SBATCH --partition=sadow ##, gpu, kill-shared, shared
 #SBATCH --account=sadow
 
-##SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=6
 #SBATCH --mem=48gb ## max amount of memory per node you require
 #SBATCH --time=07-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on sadow
@@ -13,11 +13,11 @@
 #SBATCH --output=./logs/optuna-%A.out
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=linneamw@hawaii.edu
-#SBATCH --begin=now+48hour ## x hours from now
+##SBATCH --begin=now+48hour ## x hours from now
 
 # Load python profile, then call python script passing SLURM_ARRAY_TASK_ID as an argument.
 source ~/profiles/auto.profile
-source activate gcr
+source activate gcr-gpu
 
 # nvidia-smi
 # echo "Running on GPU: $CUDA_VISIBLE_DEVICES"
