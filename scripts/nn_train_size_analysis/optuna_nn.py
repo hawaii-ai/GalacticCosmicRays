@@ -3,13 +3,15 @@ import datetime
 import h5py
 import numpy as np
 import optuna
-import keras_core as keras
+# import keras_core as keras
+import tensorflow as tf
 import tensorflow_io as tfio
+from tensorflow import keras
 from tensorflow.data import Dataset
 from tensorflow.data.experimental import AUTOTUNE
 from optuna.storages import JournalStorage, JournalFileStorage
 
-from GalacticCosmicRays.scripts.nn_train_size_analysis.rtdl_num_embeddings_tf import (
+from rtdl_num_embeddings_tf import (
     LinearEmbeddings,
     LinearReLUEmbeddings,
     PeriodicEmbeddings,
@@ -42,6 +44,8 @@ def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
 
     # Get number of training samples (from the dataset)
     train_size = int(np.floor(num_train_samples * train_size_fraction))
+    print(f"Number of training samples: {train_size} out of {num_train_samples} total")
+    print(f"Number of test samples: {num_test_samples}")
 
     # Choose seed based on model version
     data_seeds = {
@@ -91,28 +95,14 @@ def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
     train = train.batch(batch_size, drop_remainder=True).prefetch(AUTOTUNE)
     test = test.batch(batch_size, drop_remainder=True).prefetch(AUTOTUNE)
 
-    return train, test, train_size, num_test_samples, batch_size
+    return train, test, train_size, num_test_samples, batch_size, num_inputs
 
-def build_model(trial, x_train):
-    n_layers = trial.suggest_int("n_layers", 3, 10)
-    units = trial.suggest_categorical("units", [512, 1024, 2048, 4096])
-    embedding_method = trial.suggest_categorical("embedding_method", [
-        "none",
-        "linear_relu",
-        "periodic",
-        "piecewise_linear_relu"
-    ])
-    print(f"Trial {trial.number}: Building model with embedding {embedding_method}, {n_layers} layers, and {units} units per layer")
+def build_model(input_dim, n_layers, units, embedding_method, embed_dim=12, n_bins=48):
+    print(f"Building model with embedding {embedding_method}, {n_layers} layers, and {units} units per layer")
 
-    model = keras.Sequential()
+    model = keras.Sequential([keras.Input(shape=(input_dim,), dtype="float32")])
 
-    # Implement embedding method
-    input_dim = 8
-    embed_dim = 12
-    n_bins = 48
-
-    model.add(keras.Input(shape=(input_dim,)))
-
+    # Tabular embedding layer
     if embedding_method == "linear":
         model.add(LinearEmbeddings(input_dim, embed_dim))
         model.add(keras.layers.Flatten())
@@ -120,21 +110,29 @@ def build_model(trial, x_train):
         model.add(LinearReLUEmbeddings(input_dim, embed_dim))
         model.add(keras.layers.Flatten())
     elif embedding_method == "periodic":
+        # Defaults: k=64, sigma=0.02, activation=True (you can change)
         model.add(PeriodicEmbeddings(input_dim, embed_dim))
         model.add(keras.layers.Flatten())
-    elif embedding_method == "piecewise_linear":
-        bins = compute_bins(x_train, n_bins)
-        model.add(PiecewiseLinearEmbeddings(input_dim, embed_dim, activation=False, version="B"))
-        model.add(keras.layers.Flatten())
-    elif embedding_method == "piecewise_linear_relu":
-        bins = compute_bins(x_train, n_bins)
-        model.add(PiecewiseLinearEmbeddings(input_dim, embed_dim, activation=True, version="B"))
-        model.add(keras.layers.Flatten())
+    # TODO: fix piecewise_linear embedding (currently returning NaN loss)
+    # elif embedding_method in {"piecewise_linear", "piecewise_linear_relu"}:
+    #     # Compute bins **once** outside the training loop; pass numpy or a dense tensor
+    #     bins = compute_bins(x_train, n_bins)
+    #     model.add(PiecewiseLinearEmbeddings(
+    #         bins, embed_dim,
+    #         activation=(embedding_method == "piecewise_linear_relu"),
+    #         version="B"  # residual linear, as in your code
+    #     ))
+    #     model.add(keras.layers.Flatten())
+    else:
+        raise ValueError(f"Unknown embedding_method: {embedding_method}")
 
+    # If you’re using SELU, pair with lecun_normal + AlphaDropout (recommended for SELU)
     for _ in range(n_layers):
-        model.add(keras.layers.Dense(units, activation="selu"))
-    model.add(keras.layers.Dense(32, activation="linear"))
+        model.add(keras.layers.Dense(units, activation="selu", kernel_initializer="lecun_normal"))
+        # optional:
+        # model.add(keras.layers.AlphaDropout(0.05))
 
+    model.add(keras.layers.Dense(32, activation="linear"))
     return model
 
 def objective(trial):
@@ -153,27 +151,36 @@ def objective(trial):
     weight_decay = trial.suggest_float("weight_decay", 1e-9, 1e-3, log=True)
     print(f"Trial {trial.number}: Learning rate: {learning_rate}, Weight decay: {weight_decay}")
 
-    train, test, train_size, num_test_samples, batch_size = load_dataset(
+    train, test, train_size, num_test_samples, batch_size, num_inputs = load_dataset(
         args["polarity"], args["data_version"], args["train_size_fraction"], args["bootstrap"]
     )
 
-    # Some calcs
-    steps_per_epoch = train_size // batch_size
-    validation_steps = num_test_samples // batch_size
+    # Commented out due to issue with piecewise linear embeddings
+    # # Get x_final_train from the zipped and shuffled and batched train
+    # # Collect all batches into memory
+    # x_batches = []
+    # for x_batch, _ in train:   # iterate through the dataset
+    #     x_batches.append(x_batch.numpy())  # convert to numpy
 
-    # Get x_final_train from the zipped and shuffled and batched train
-    # Collect all batches into memory
-    x_batches = []
-    for x_batch, _ in train:   # iterate through the dataset
-        x_batches.append(x_batch.numpy())  # convert to numpy
+    # # Concatenate into a single array
+    # x_final_train = np.concatenate(x_batches, axis=0)
+    # x_final_train_tensor = tf.convert_to_tensor(x_final_train, dtype=tf.float32)
 
-    # Concatenate into a single array
-    x_final_train = np.concatenate(x_batches, axis=0)
-    x_final_train_tensor = 
+    # Get trial hyperparameters
+    n_layers = trial.suggest_int("n_layers", 3, 10)
+    units = trial.suggest_categorical("units", [512, 1024, 2048, 4096])
+    embedding_method = trial.suggest_categorical("embedding_method", [
+        "none",
+        "linear_relu",
+        "periodic",
+        # "piecewise_linear_relu"
+    ])
 
-    # Define model and compile
-    model = build_model(trial, x_final_train)
+    # Define model
+    model = build_model(num_inputs, n_layers, units, embedding_method)
+    print(model.summary())
 
+    # Compile model
     optimizer = keras.optimizers.AdamW(learning_rate=learning_rate, weight_decay=weight_decay)
     model.compile(optimizer=optimizer, loss='mae', metrics=['mse'])
 
@@ -182,8 +189,6 @@ def objective(trial):
         train,
         epochs=150,
         validation_data=test,
-        steps_per_epoch=steps_per_epoch,
-        validation_steps=validation_steps,
         shuffle=False,
         verbose=2,
         callbacks=[

@@ -1,574 +1,333 @@
-"""
-On Embeddings for Numerical Features in Tabular Deep Learning.
-TensorFlow/Keras re-implementation.
-"""
+# rtdl_num_embeddings_tf.py
+# Tensorflow implementation of original PyTorch package, code here: https://github.com/yandex-research/rtdl-num-embeddings/blob/main/package/rtdl_num_embeddings.py
+# Implementation by Linnea Wolniewicz, 2025
 
-# TODO: finish tensorflow implementation and check if it works
+from __future__ import annotations
 
-# __version__ = '0.0.12-tf'
-
-__all__ = [
-    'LinearEmbeddings',
-    'LinearReLUEmbeddings',
-    'PeriodicEmbeddings',
-    'PiecewiseLinearEmbeddings',
-    'PiecewiseLinearEncoding',
-    'compute_bins',
-]
-
-from typing import Any, Literal, Optional, Union
-import tensorflow as tf
-import numpy as np
+from typing import Any, List, Literal, Optional, Sequence, Tuple
 import math
-import warnings
-
-try:
-    import sklearn.tree as sklearn_tree
-except ImportError:
-    sklearn_tree = None
-
-try:
-    from tqdm import tqdm
-except ImportError:
-    tqdm = None
-
-
+import numpy as np
 import tensorflow as tf
 
-def _check_input_shape(x: tf.Tensor, expected_n_features: int) -> None:
-    if len(x.shape) < 1:
+def _check_input_shape(x: tf.Tensor, n_features: int, name: str = "input"):
+    if x.shape.rank is None:
+        raise ValueError("Input rank must be known.")
+    if x.shape[-1] != n_features:
         raise ValueError(
-            f"The input must have at least one dimension, got shape {x.shape}"
+            f"{name} last dimension must be n_features={n_features}, got shape {x.shape}."
         )
-    if x.shape[-1] != expected_n_features:
-        raise ValueError(
-            f"The last dimension of the input was expected to be {expected_n_features}, got {x.shape[-1]}"
-        )
-
-
 
 class LinearEmbeddings(tf.keras.layers.Layer):
     """
     Linear embeddings for continuous features.
 
-    Args:
-        n_features: Number of continuous features.
-        d_embedding: Embedding size.
-
-    Input shape: (..., n_features)
-    Output shape: (..., n_features, d_embedding)
+    Output shape: (batch, n_features, d_embedding)
     """
-    def __init__(self, n_features: int, d_embedding: int):
-        super().__init__()
-        self.n_features = n_features
-        self.d_embedding = d_embedding
-        lim = 1.0 / tf.math.sqrt(tf.cast(d_embedding, tf.float32)).numpy()
+    def __init__(self, n_features: int, d_embedding: int, name: str | None = None):
+        super().__init__(name=name)
+        if n_features <= 0:
+            raise ValueError("n_features must be positive")
+        if d_embedding <= 0:
+            raise ValueError("d_embedding must be positive")
+        self.n_features = int(n_features)
+        self.d_embedding = int(d_embedding)
+    def build(self, input_shape):
+        d_rsqrt = self.d_embedding ** -0.5
         self.weight = self.add_weight(
-            shape=(n_features, d_embedding),
-            initializer=tf.keras.initializers.RandomUniform(-lim, lim),
+            name="weight",
+            shape=(self.n_features, self.d_embedding),
+            initializer=tf.keras.initializers.RandomUniform(minval=-d_rsqrt, maxval=d_rsqrt),
             trainable=True,
-            name="weight"
         )
         self.bias = self.add_weight(
-            shape=(n_features, d_embedding),
-            initializer=tf.keras.initializers.RandomUniform(-lim, lim),
+            name="bias",
+            shape=(self.n_features, self.d_embedding),
+            initializer=tf.keras.initializers.RandomUniform(minval=-d_rsqrt, maxval=d_rsqrt),
             trainable=True,
-            name="bias"
         )
-
     def call(self, x: tf.Tensor) -> tf.Tensor:
         _check_input_shape(x, self.n_features)
-        x = tf.expand_dims(x, -1)  # (..., n_features, 1)
-        return self.bias + self.weight * x
-
-
+        x_exp = tf.expand_dims(x, axis=-1)  # (B, F, 1)
+        out = self.bias + self.weight * x_exp  # (B, F, D)
+        return out
 
 class LinearReLUEmbeddings(tf.keras.layers.Layer):
-    """
-    Simple non-linear embeddings for continuous features.
-
-    Args:
-        n_features: Number of continuous features.
-        d_embedding: Embedding size (default: 32).
-
-    Input shape: (..., n_features)
-    Output shape: (..., n_features, d_embedding)
-    """
-    def __init__(self, n_features: int, d_embedding: int = 32):
-        super().__init__()
+    """ReLU(LinearEmbeddings(...))."""
+    def __init__(self, n_features: int, d_embedding: int, name: str | None = None):
+        super().__init__(name=name)
         self.linear = LinearEmbeddings(n_features, d_embedding)
-        self.activation = tf.keras.layers.ReLU()
-
+        self.relu = tf.keras.layers.ReLU()
     def call(self, x: tf.Tensor) -> tf.Tensor:
-        x = self.linear(x)
-        return self.activation(x)
-
-
+        return self.relu(self.linear(x))
 
 class _Periodic(tf.keras.layers.Layer):
-    """
-    NOTE: THIS MODULE SHOULD NOT BE USED DIRECTLY.
-
-    Technically, this is a linear embedding without bias followed by
-    the periodic activations. The scale of the initialization
-    (defined by the `sigma` argument) plays an important role.
-    """
-
-    def __init__(self, n_features: int, k: int, sigma: float) -> None:
-        super().__init__()
+    """Linear transform (no bias) -> concat(cos, sin)."""
+    def __init__(self, n_features: int, k: int, sigma: float, name: str | None = None):
+        super().__init__(name=name)
         if sigma <= 0.0:
-            raise ValueError(f'sigma must be positive, however: {sigma=}')
-        self._sigma = sigma
-        self.n_features = n_features
-        self.k = k
-        # Truncated normal initialization within [-bound, bound]
-        bound = sigma * 3
-        initializer = tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=sigma)
-        # We'll clip after initialization to [-bound, bound]
-        initial_weight = initializer(shape=(n_features, k))
-        initial_weight = tf.clip_by_value(initial_weight, -bound, bound)
-        self.weight = tf.Variable(initial_weight, trainable=True, name="weight")
-
+            raise ValueError("sigma must be positive")
+        self.n_features = int(n_features)
+        self.k = int(k)
+        self.sigma = float(sigma)
+    def build(self, input_shape):
+        bound = self.sigma * 3.0
+        self.weight = self.add_weight(
+            name="weight",
+            shape=(self.n_features, self.k),
+            initializer=tf.keras.initializers.TruncatedNormal(mean=0.0, stddev=self.sigma),
+            trainable=True,
+        )
+        self.weight.assign(tf.clip_by_value(self.weight, -bound, bound))
     def call(self, x: tf.Tensor) -> tf.Tensor:
         _check_input_shape(x, self.n_features)
-        # x: (..., n_features)
-        # self.weight: (n_features, k)
-        # x[..., None]: (..., n_features, 1)
-        # self.weight[None, ...]: (1, n_features, k) for broadcasting
-        # But tf will broadcast automatically
-        x_proj = 2 * math.pi * self.weight * tf.expand_dims(x, -1)  # (..., n_features, k)
-        x_cos = tf.math.cos(x_proj)
-        x_sin = tf.math.sin(x_proj)
-        # Concatenate on the last axis (k -> 2k)
-        x_out = tf.concat([x_cos, x_sin], axis=-1)
-        return x_out
-
-
-# _NLinear is a simplified copy of delu.nn.NLinear:
-# https://yura52.github.io/delu/stable/api/generated/delu.nn.NLinear.html
+        arg = 2.0 * math.pi * tf.expand_dims(x, -1) * self.weight  # (B, F, K)
+        return tf.concat([tf.cos(arg), tf.sin(arg)], axis=-1)  # (B, F, 2K)
 
 class _NLinear(tf.keras.layers.Layer):
-    """N *separate* linear layers for N feature embeddings.
-
-    In other words,
-    each feature embedding is transformed by its own dedicated linear layer.
-    """
-
-    def __init__(self, n: int, in_features: int, out_features: int, bias: bool = True) -> None:
-        super().__init__()
-        self.n = n
-        self.in_features = in_features
-        self.out_features = out_features
-        self.use_bias = bias
-        d_in_rsqrt = in_features ** -0.5
-        # Weight shape: (n, in_features, out_features)
+    """N separate linear layers: (B, N, Din) -> (B, N, Dout)."""
+    def __init__(self, n: int, in_features: int, out_features: int, bias: bool = True, name: str | None = None):
+        super().__init__(name=name)
+        self.n = int(n)
+        self.in_features = int(in_features)
+        self.out_features = int(out_features)
+        self.use_bias = bool(bias)
+    def build(self, input_shape):
+        limit = (self.in_features ** -0.5)
         self.weight = self.add_weight(
-            shape=(n, in_features, out_features),
-            initializer=tf.keras.initializers.RandomUniform(-d_in_rsqrt, d_in_rsqrt),
+            name="weight",
+            shape=(self.n, self.in_features, self.out_features),
+            initializer=tf.keras.initializers.RandomUniform(minval=-limit, maxval=limit),
             trainable=True,
-            name="weight"
         )
-        if bias:
+        if self.use_bias:
             self.bias = self.add_weight(
-                shape=(n, out_features),
-                initializer=tf.keras.initializers.RandomUniform(-d_in_rsqrt, d_in_rsqrt),
+                name="bias",
+                shape=(self.n, self.out_features),
+                initializer=tf.keras.initializers.RandomUniform(minval=-limit, maxval=limit),
                 trainable=True,
-                name="bias"
             )
         else:
             self.bias = None
-
     def call(self, x: tf.Tensor) -> tf.Tensor:
-        # x: (batch_size, n, in_features)
-        if x.ndim != 3:
-            raise ValueError(
-                '_NLinear supports only inputs with exactly one batch dimension, so `x` must have a shape like (BATCH_SIZE, N_FEATURES, D_EMBEDDING).'
-            )
-        if x.shape[1] != self.n or x.shape[2] != self.in_features:
-            raise ValueError(f"Input shape {x.shape} does not match expected (batch_size, {self.n}, {self.in_features})")
-        # For each feature (axis 1), apply its own linear layer to the last axis
-        # Output: (batch_size, n, out_features)
-        # Use einsum for batch matrix multiplication: 'bni,nio->bno'
-        out = tf.einsum('bni,nio->bno', x, self.weight)
+        if x.shape.rank != 3:
+            raise ValueError("x must be (batch, n, d_in)")
+        y = tf.einsum("bnd,ndo->bno", x, self.weight)
         if self.bias is not None:
-            out = out + self.bias  # broadcast (n, out_features) over batch
-        return out
-
-
+            y = y + self.bias
+        return y
 
 class PeriodicEmbeddings(tf.keras.layers.Layer):
-    """Embeddings for continuous features based on periodic activations.
-
-    See README for details.
-
-    Input shape: (..., n_features)
-    Output shape: (..., n_features, d_embedding)
+    """
+    Periodic embeddings: _Periodic -> _NLinear (+ optional residual) -> ReLU (optional)
     """
     def __init__(
         self,
         n_features: int,
-        d_embedding: int = 24,
-        *,
-        n_frequencies: int = 48,
-        frequency_init_scale: float = 0.01,
-        activation: bool = True,
-        lite: bool = False,
-    ):
-        super().__init__()
-        self.n_features = n_features
-        self.d_embedding = d_embedding
-        self.n_frequencies = n_frequencies
-        self.frequency_init_scale = frequency_init_scale
-        self.activation_flag = activation
-        self.lite = lite
-        self.periodic = _Periodic(n_features, n_frequencies, frequency_init_scale)
-        if lite:
-            if not activation:
-                raise ValueError('lite=True is allowed only when activation=True')
-            # Shared linear layer for all features
-            self.linear = tf.keras.layers.Dense(
-                d_embedding,
-                use_bias=True,
-                input_shape=(2 * n_frequencies,),
-                name="periodic_dense_lite"
-            )
-        else:
-            # Separate linear layer for each feature
-            self.linear = _NLinear(n_features, 2 * n_frequencies, d_embedding)
-        self.activation = tf.keras.layers.ReLU() if activation else None
-
-    def get_output_shape(self):
-        """Get the output shape without the batch dimensions."""
-        return (self.n_features, self.d_embedding)
-
-    def call(self, x: tf.Tensor) -> tf.Tensor:
-        # x: (..., n_features)
-        x = self.periodic(x)  # (..., n_features, 2 * n_frequencies)
-        if self.lite:
-            # Apply the same Dense layer to each feature vector
-            # x: (..., n_features, 2 * n_frequencies)
-            # We need to apply Dense to the last axis for each feature
-            # Reshape to (-1, 2 * n_frequencies), apply Dense, then reshape back
-            orig_shape = tf.shape(x)
-            batch_dims = orig_shape[:-2]
-            n_features = orig_shape[-2]
-            x_flat = tf.reshape(x, [-1, 2 * self.n_frequencies])
-            x_out = self.linear(x_flat)
-            x_out = tf.reshape(x_out, tf.concat([batch_dims, [n_features, self.d_embedding]], axis=0))
-        else:
-            # _NLinear expects (batch_size, n, in_features)
-            # If input is (..., n_features, 2 * n_frequencies), flatten batch dims
-            x_shape = tf.shape(x)
-            batch_size = tf.reduce_prod(x_shape[:-2])
-            x_reshaped = tf.reshape(x, [batch_size, self.n_features, 2 * self.n_frequencies])
-            x_out = self.linear(x_reshaped)
-            # Reshape back to original batch dims
-            out_shape = tf.concat([x_shape[:-2], [self.n_features, self.d_embedding]], axis=0)
-            x_out = tf.reshape(x_out, out_shape)
-        if self.activation is not None:
-            x_out = self.activation(x_out)
-        return x_out
-
-
-
-def _check_bins(bins: list) -> None:
-    """
-    Check that bins is a list of 1D numpy arrays or tf.Tensor, with at least two elements, sorted, and finite.
-    """
-    if not bins:
-        raise ValueError('The list of bins must not be empty')
-    for i, feature_bins in enumerate(bins):
-        # Accept numpy arrays or tf.Tensor
-        if not (isinstance(feature_bins, np.ndarray) or isinstance(feature_bins, tf.Tensor)):
-            raise ValueError(
-                f'bins must be a list of numpy arrays or tf.Tensor. However, for {i=}: {type(feature_bins)=}'
-            )
-        arr = feature_bins.numpy() if isinstance(feature_bins, tf.Tensor) else feature_bins
-        if arr.ndim != 1:
-            raise ValueError(
-                f'Each item of the bin list must have exactly one dimension. However, for {i=}: {arr.ndim=}'
-            )
-        if len(arr) < 2:
-            raise ValueError(
-                f'All features must have at least two bin edges. However, for {i=}: {len(arr)=}'
-            )
-        if not np.isfinite(arr).all():
-            raise ValueError(
-                f'Bin edges must not contain nan/inf/-inf. However, this is not true for the {i}-th feature'
-            )
-        if np.any(arr[:-1] >= arr[1:]):
-            raise ValueError(
-                f'Bin edges must be sorted. However, for the {i}-th feature, the bin edges are not sorted'
-            )
-        if len(arr) == 2:
-            warnings.warn(
-                f'The {i}-th feature has just two bin edges, which means only one bin.'
-                ' Strictly speaking, using a single bin for the'
-                ' piecewise-linear encoding should not break anything,'
-                ' but it is the same as using sklearn.preprocessing.MinMaxScaler'
-            )
-
-
-
-def compute_bins(
-    X,
-    n_bins: int = 48,
-    *,
-    tree_kwargs: Optional[dict] = None,
-    y: Optional[np.ndarray] = None,
-    regression: Optional[bool] = None,
-    verbose: bool = False,
-) -> list:
-    """Compute the bin boundaries for PiecewiseLinearEncoding and PiecewiseLinearEmbeddings.
-
-    Args:
-        X: the training features (numpy array or tf.Tensor, shape (n_samples, n_features)).
-        n_bins: the number of bins.
-        tree_kwargs: keyword arguments for sklearn.tree.DecisionTreeRegressor or DecisionTreeClassifier.
-        y: the training labels (must be provided if tree_kwargs is not None).
-        regression: whether the labels are regression labels (must be provided if tree_kwargs is not None).
-        verbose: if True and tree_kwargs is not None, tqdm will report progress.
-
-    Returns:
-        A list of bin edges for all features (as numpy arrays).
-    """
-    # Convert tf.Tensor to numpy if needed
-    if isinstance(X, tf.Tensor):
-        X = X.numpy()
-    if not isinstance(X, np.ndarray):
-        raise ValueError(f'X must be a numpy array or tf.Tensor, got {type(X)}')
-    if X.ndim != 2:
-        raise ValueError(f'X must have exactly two dimensions, got {X.ndim}')
-    if X.shape[0] < 2:
-        raise ValueError(f'X must have at least two rows, got {X.shape[0]}')
-    if X.shape[1] < 1:
-        raise ValueError(f'X must have at least one column, got {X.shape[1]}')
-    if not np.isfinite(X).all():
-        raise ValueError('X must not contain nan/inf/-inf.')
-    if np.any(np.all(X == X[0], axis=0)):
-        raise ValueError('All columns of X must have at least two distinct values.')
-    if n_bins <= 1 or n_bins >= len(X):
-        raise ValueError(f'n_bins must be more than 1, but less than len(X), got n_bins={n_bins}, len(X)={len(X)}')
-
-    if tree_kwargs is None:
-        if y is not None or regression is not None or verbose:
-            raise ValueError('If tree_kwargs is None, then y, regression must be None and verbose must be False')
-        # Quantile-based bins
-        quantiles = np.linspace(0.0, 1.0, n_bins + 1)
-        bins = [
-            np.unique(np.quantile(X[:, i], quantiles))
-            for i in range(X.shape[1])
-        ]
-        _check_bins(bins)
-        return bins
-    else:
-        if sklearn_tree is None:
-            raise RuntimeError('The scikit-learn package is missing. See README.md for installation instructions')
-        if y is None or regression is None:
-            raise ValueError('If tree_kwargs is not None, then y and regression must not be None')
-        if isinstance(y, tf.Tensor):
-            y = y.numpy()
-        if not isinstance(y, np.ndarray):
-            raise ValueError('y must be a numpy array or tf.Tensor')
-        if y.ndim != 1:
-            raise ValueError(f'y must have exactly one dimension, got {y.ndim}')
-        if len(y) != len(X):
-            raise ValueError(f'len(y) must be equal to len(X), got len(y)={len(y)}, len(X)={len(X)}')
-        if 'max_leaf_nodes' in tree_kwargs:
-            raise ValueError('tree_kwargs must not contain the key "max_leaf_nodes" (it will be set to n_bins automatically).')
-
-        tqdm_ = tqdm if (verbose and tqdm is not None) else lambda x: x
-        bins = []
-        for i, column in enumerate(tqdm_(X.T)):
-            feature_bin_edges = [float(np.min(column)), float(np.max(column))]
-            tree_cls = sklearn_tree.DecisionTreeRegressor if regression else sklearn_tree.DecisionTreeClassifier
-            tree = tree_cls(max_leaf_nodes=n_bins, **tree_kwargs).fit(column.reshape(-1, 1), y).tree_
-            for node_id in range(tree.node_count):
-                # Only for split nodes
-                if tree.children_left[node_id] != tree.children_right[node_id]:
-                    feature_bin_edges.append(float(tree.threshold[node_id]))
-            bins.append(np.unique(feature_bin_edges))
-        _check_bins(bins)
-        return bins
-
-
-
-class _PiecewiseLinearEncodingImpl(tf.keras.layers.Layer):
-    """Piecewise-linear encoding (TensorFlow version).
-
-    NOTE: THIS CLASS SHOULD NOT BE USED DIRECTLY.
-    In particular, this class does *not* add any positional information
-    to feature encodings. Thus, for Transformer-like models,
-    `PiecewiseLinearEmbeddings` is the only valid option.
-    """
-    def __init__(self, bins: list) -> None:
-        super().__init__()
-        assert len(bins) > 0
-        n_features = len(bins)
-        n_bins = [len(np.array(x)) - 1 for x in bins]
-        max_n_bins = max(n_bins)
-
-        # Store weight and bias as non-trainable variables (constant)
-        weight = np.zeros((n_features, max_n_bins), dtype=np.float32)
-        bias = np.zeros((n_features, max_n_bins), dtype=np.float32)
-
-        for i, bin_edges in enumerate(bins):
-            bin_edges = np.array(bin_edges)
-            bin_width = np.diff(bin_edges)
-            w = 1.0 / bin_width
-            b = -bin_edges[:-1] / bin_width
-            weight[i, -1] = w[-1]
-            bias[i, -1] = b[-1]
-            if n_bins[i] > 1:
-                weight[i, : n_bins[i] - 1] = w[:-1]
-                bias[i, : n_bins[i] - 1] = b[:-1]
-        self.weight = tf.constant(weight, dtype=tf.float32)
-        self.bias = tf.constant(bias, dtype=tf.float32)
-
-        # single_bin_mask: shape (n_features,)
-        single_bin_mask = np.array(n_bins) == 1
-        self.single_bin_mask = tf.constant(single_bin_mask, dtype=tf.bool) if np.any(single_bin_mask) else None
-
-        # mask: shape (n_features, max_n_bins), True for valid (non-padding) components
-        if all(len(x) == len(bins[0]) for x in bins):
-            self.mask = None
-        else:
-            mask = []
-            for x in bins:
-                n = len(x) - 1
-                m = max_n_bins
-                mask_row = np.concatenate([
-                    np.ones(n - 1, dtype=bool) if n > 1 else np.zeros(0, dtype=bool),
-                    np.zeros(m - n, dtype=bool),
-                    np.ones(1, dtype=bool)
-                ])
-                mask.append(mask_row)
-            self.mask = tf.constant(np.stack(mask, axis=0), dtype=tf.bool)
-
-    def get_max_n_bins(self) -> int:
-        return int(self.weight.shape[-1])
-
-    def call(self, x: tf.Tensor) -> tf.Tensor:
-        # x: (..., n_features)
-        # self.weight: (n_features, max_n_bins)
-        # self.bias: (n_features, max_n_bins)
-        x = tf.expand_dims(x, -1)  # (..., n_features, 1)
-        out = self.bias + self.weight * x  # (..., n_features, max_n_bins)
-        # Now apply clamping logic
-        if out.shape[-1] > 1:
-            # Clamp first, middle, and last components as in the original
-            first = tf.clip_by_value(out[..., :1], clip_value_min=-np.inf, clip_value_max=1.0)
-            middle = tf.clip_by_value(out[..., 1:-1], 0.0, 1.0)
-            last = out[..., -1:]
-            if self.single_bin_mask is None:
-                last = tf.clip_by_value(last, 0.0, np.inf)
-            else:
-                # For features with only one bin, do not clamp last component
-                mask = tf.cast(self.single_bin_mask, out.dtype)
-                last = mask * last + (1.0 - mask) * tf.clip_by_value(last, 0.0, np.inf)
-                # Broadcast mask to match batch dims
-                for _ in range(len(out.shape) - 2):
-                    last = tf.expand_dims(last, 0)
-            out = tf.concat([first, middle, last], axis=-1)
-        return out
-
-
-
-class PiecewiseLinearEncoding(tf.keras.layers.Layer):
-    """Piecewise-linear encoding (TensorFlow version).
-
-    See README for detailed explanation.
-
-    Input: (..., n_features)
-    Output: (..., total_n_bins), where total_n_bins = sum(len(b) - 1 for b in bins)
-    """
-    def __init__(self, bins: list) -> None:
-        super().__init__()
-        self.impl = _PiecewiseLinearEncodingImpl(bins)
-
-        # Compute total_n_bins for output shape
-        if self.impl.mask is None:
-            self._total_n_bins = int(np.prod(self.impl.weight.shape))
-        else:
-            self._total_n_bins = int(np.sum(self.impl.mask.numpy().astype(np.int32)))
-
-    def get_output_shape(self):
-        """Get the output shape without the batch dimensions."""
-        return (self._total_n_bins,)
-
-    def call(self, x: tf.Tensor) -> tf.Tensor:
-        # x: (..., n_features)
-        x = self.impl(x)
-        if self.impl.mask is None:
-            # Flatten last two dims
-            shape = tf.shape(x)
-            new_shape = tf.concat([shape[:-2], [shape[-2] * shape[-1]]], axis=0)
-            return tf.reshape(x, new_shape)
-        else:
-            # Mask out padding (keep only valid components)
-            # x: (..., n_features, max_n_bins), mask: (n_features, max_n_bins)
-            # We'll flatten the last two dims and apply the mask
-            mask = self.impl.mask
-            x_flat = tf.reshape(x, tf.concat([tf.shape(x)[:-2], [-1]], axis=0))
-            mask_flat = tf.reshape(mask, [-1])
-            # Only keep the masked (True) elements for each sample
-            # tf.boolean_mask applies mask to the last dim
-            return tf.boolean_mask(x_flat, mask_flat, axis=-1)
-
-
-
-class PiecewiseLinearEmbeddings(tf.keras.layers.Layer):
-    """Piecewise-linear embeddings (TensorFlow version).
-
-    Input: (batch_size, n_features)
-    Output: (batch_size, n_features, d_embedding)
-    """
-    def __init__(
-        self,
-        bins: list,
         d_embedding: int,
         *,
-        activation: bool,
-        version: Optional[str] = None,
+        k: int = 64,
+        sigma: float = 0.02,
+        activation: bool = True,
+        version: Optional[Literal["A", "B"]] = None,
+        name: str | None = None,
     ):
-        super().__init__()
-        if d_embedding <= 0:
-            raise ValueError(f'd_embedding must be a positive integer, got {d_embedding}')
-        _check_bins(bins)
-        if version is None:
-            warnings.warn(
-                'The `version` argument is not provided, so version="A" will be used'
-                ' for backward compatibility.'
-                ' See README for recommendations regarding `version`.'
-                ' In future, omitting this argument will result in an exception.'
-            )
-            version = 'A'
-        n_features = len(bins)
-        is_version_B = version == 'B'
-        self.linear0 = LinearEmbeddings(n_features, d_embedding) if is_version_B else None
-        self.impl = _PiecewiseLinearEncodingImpl(bins)
-        self.linear = _NLinear(
-            n_features,
-            self.impl.get_max_n_bins(),
-            d_embedding,
-            bias=not is_version_B,
-        )
-        # In PyTorch version, version B zero-initializes self.linear.weight
-        # In TensorFlow, we cannot directly zero the weights after creation, but can set initializer if needed
+        super().__init__(name=name)
+        if n_features <= 0 or d_embedding <= 0:
+            raise ValueError("n_features and d_embedding must be positive")
+        if k <= 0:
+            raise ValueError("k must be positive")
+        if sigma <= 0.0:
+            raise ValueError("sigma must be positive")
+        self.n_features = int(n_features)
+        self.d_embedding = int(d_embedding)
+        self.k = int(k)
+        self.sigma = float(sigma)
+        self.version = version
+        self.periodic = _Periodic(n_features, k, sigma)
+        self.linear = _NLinear(n_features, 2 * k, d_embedding, bias=True)
         self.activation = tf.keras.layers.ReLU() if activation else None
-
-    def get_output_shape(self):
-        n_features = self.linear.n
-        d_embedding = self.linear.out_features
-        return (n_features, d_embedding)
-
+        self.linear0 = LinearEmbeddings(n_features, d_embedding) if version == "B" else None
     def call(self, x: tf.Tensor) -> tf.Tensor:
-        # x: (batch_size, n_features)
-        if x.ndim != 2:
-            raise ValueError('For now, only inputs with exactly one batch dimension are supported.')
-        x_linear = self.linear0(x) if self.linear0 is not None else None
-        x_ple = self.impl(x)
-        x_ple = self.linear(x_ple)
+        _check_input_shape(x, self.n_features)
+        x_res = self.linear0(x) if self.linear0 is not None else None
+        x = self.periodic(x)
+        x = self.linear(x)
         if self.activation is not None:
-            x_ple = self.activation(x_ple)
-        return x_ple if x_linear is None else x_linear + x_ple
+            x = self.activation(x)
+        return x if x_res is None else (x + x_res)
+
+def _prepare_bins(bins: Sequence[np.ndarray | tf.Tensor]):
+    bins_tf: List[tf.Tensor] = []
+    n_bins_per_feature: List[int] = []
+    for i, b in enumerate(bins):
+        bt = tf.convert_to_tensor(b, dtype=tf.float32)
+        if bt.shape.rank != 1 or bt.shape[0] < 2:
+            raise ValueError(f"Each bins[{i}] must be 1D with at least two edges")
+        bins_tf.append(bt)
+        n_bins_per_feature.append(int(bt.shape[0]) - 1)
+    max_n_bins = int(max(n_bins_per_feature))
+    if any(nb != max_n_bins for nb in n_bins_per_feature):
+        rows = []
+        for nb in n_bins_per_feature:
+            keep = np.concatenate([
+                np.ones(nb - 1, dtype=bool),
+                np.zeros(max_n_bins - nb, dtype=bool),
+                np.ones(1, dtype=bool),
+            ])
+            rows.append(keep)
+        mask = tf.convert_to_tensor(np.concatenate(rows, axis=0))
+    else:
+        mask = None
+    return bins_tf, max_n_bins, mask
+
+class _PiecewiseLinearEncodingImpl(tf.keras.layers.Layer):
+    def __init__(self, bins: Sequence[np.ndarray | tf.Tensor], name: str | None = None):
+        super().__init__(name=name)
+        self._bins_raw = bins
+        self._built_constants = False
+    def build(self, input_shape):
+        bins_tf, max_n_bins, mask = _prepare_bins(self._bins_raw)
+        self.n_features = len(bins_tf)
+        self.max_n_bins = max_n_bins
+        self.mask = mask
+        edges = tf.ragged.stack(bins_tf).to_tensor(shape=(self.n_features, max_n_bins + 1), default_value=np.nan)
+        self.bin_left = self.add_weight(
+            name="bin_left", shape=edges[:, :-1].shape, initializer=tf.keras.initializers.Constant(edges[:, :-1]), trainable=False
+        )
+        self.bin_right = self.add_weight(
+            name="bin_right", shape=edges[:, 1:].shape, initializer=tf.keras.initializers.Constant(edges[:, 1:]), trainable=False
+        )
+        self._built_constants = True
+    def call(self, x: tf.Tensor) -> tf.Tensor:
+        _check_input_shape(x, int(self.n_features))
+        M = self.max_n_bins
+        x3 = tf.expand_dims(x, -1)  # (B, F, 1)
+        left = self.bin_left       # (F, M)
+        right = self.bin_right     # (F, M)
+        width = right - left
+        width_safe = tf.where(tf.math.is_finite(width), width, tf.ones_like(width))
+        r = (x3 - left) / width_safe  # (B, F, M)
+        inner = tf.clip_by_value(r, 0.0, 1.0)  # (B, F, M)
+        last_bin = tf.nn.relu(x3[..., -1:] - left[..., -1:])  # (B, F, 1)
+        inner_except_last = inner[..., :-1] if M > 1 else tf.zeros_like(inner[..., :0])
+        enc = tf.concat([inner_except_last, last_bin], axis=-1)  # (B, F, M)
+        return enc
+
+class PiecewiseLinearEncoding(tf.keras.layers.Layer):
+    def __init__(self, bins: Sequence[np.ndarray | tf.Tensor], name: str | None = None):
+        super().__init__(name=name)
+        self.impl = _PiecewiseLinearEncodingImpl(bins)
+    def call(self, x: tf.Tensor) -> tf.Tensor:
+        enc = self.impl(x)  # (B, F, M)
+        flat = tf.reshape(enc, [tf.shape(enc)[0], -1])  # (B, F*M)
+        if self.impl.mask is None:
+            return flat
+        else:
+            return tf.boolean_mask(flat, self.impl.mask, axis=1)
+
+# TODO: Something seems to be wrong with the PiecewiseLinearEmbeddings, loss is nan when using it. Check against PyTorch version.
+class PiecewiseLinearEmbeddings(tf.keras.layers.Layer):
+    def __init__(
+        self,
+        bins: Sequence[np.ndarray | tf.Tensor],
+        d_embedding: int,
+        *,
+        activation: bool = True,
+        version: Optional[Literal["A", "B"]] = None,
+        name: str | None = None,
+    ):
+        super().__init__(name=name)
+        if d_embedding <= 0:
+            raise ValueError("d_embedding must be positive")
+        self.activation = tf.keras.layers.ReLU() if activation else None
+        self.impl = _PiecewiseLinearEncodingImpl(bins)
+        self._linear = None
+        self._linear0 = None
+        self._version = version
+        self._d_embedding = int(d_embedding)
+    def build(self, input_shape):
+        if not self.impl._built_constants:
+            dummy = tf.zeros((1, int(input_shape[-1])))
+            _ = self.impl(dummy)
+        F = self.impl.n_features
+        M = self.impl.max_n_bins
+        self._linear = _NLinear(F, M, self._d_embedding, bias=True)
+        if self._version == "B":
+            self._linear0 = LinearEmbeddings(F, self._d_embedding)
+        else:
+            self._linear0 = None
+    def call(self, x: tf.Tensor) -> tf.Tensor:
+        if x.shape.rank != 2:
+            raise ValueError("For now, only (batch, n_features) inputs are supported.")
+        x_res = self._linear0(x) if self._linear0 is not None else None
+        x_enc = self.impl(x)              # (B, F, M)
+        x_out = self._linear(x_enc)       # (B, F, D)
+        if self.activation is not None:
+            x_out = self.activation(x_out)
+        return x_out if x_res is None else (x_out + x_res)
+
+def compute_bins(
+    X: np.ndarray | tf.Tensor,
+    n_bins: int = 48,
+    *,
+    tree_kwargs: Optional[dict[str, Any]] = None,
+    y: Optional[np.ndarray | tf.Tensor] = None,
+    regression: Optional[bool] = None,
+    verbose: bool = False,
+) -> List[tf.Tensor]:
+    """
+    Compute bin boundaries per feature for Piecewise encodings.
+
+    Modes:
+      1) y is None: quantile-based bins (n_bins equal-frequency bins per feature).
+      2) y is provided: supervised bins via scikit-learn decision tree thresholds
+         with at most `n_bins` leaves.
+    Returns:
+      list of tf.Tensor of shape (n_edges_j,) for each feature.
+    """
+    X_np = X.numpy() if isinstance(X, tf.Tensor) else np.asarray(X)
+    if X_np.ndim != 2:
+        raise ValueError("X must be 2D (n_samples, n_features)")
+    n_samples, n_features = X_np.shape
+    bins: List[tf.Tensor] = []
+    if y is None:
+        qs = np.linspace(0.0, 1.0, n_bins + 1)
+        for j in range(n_features):
+            col = X_np[:, j]
+            edges = np.quantile(col, qs, method="linear")
+            edges = np.unique(edges)
+            if edges.size < 2:
+                mn = np.min(col)
+                mx = np.max(col)
+                edges = np.array([mn, mx], dtype=np.float32)
+            bins.append(tf.convert_to_tensor(edges.astype(np.float32)))
+        return bins
+    try:
+        from sklearn import tree as sklearn_tree  # type: ignore
+    except Exception as e:
+        raise RuntimeError(
+            "scikit-learn is required for supervised binning. "
+            "Install scikit-learn or call compute_bins with y=None."
+        ) from e
+    y_np = y.numpy() if isinstance(y, tf.Tensor) else np.asarray(y)
+    if regression is None:
+        regression = (y_np.dtype.kind in "f")
+    for j in range(n_features):
+        col = X_np[:, j].reshape(-1, 1)
+        if regression:
+            est = sklearn_tree.DecisionTreeRegressor(max_leaf_nodes=n_bins, **(tree_kwargs or {}))
+        else:
+            est = sklearn_tree.DecisionTreeClassifier(max_leaf_nodes=n_bins, **(tree_kwargs or {}))
+        est.fit(col, y_np)
+        tr = est.tree_
+        thr = []
+        for node_id in range(tr.node_count):
+            if tr.children_left[node_id] != tr.children_right[node_id]:
+                thr.append(float(tr.threshold[node_id]))
+        edges = np.unique(np.asarray(thr, dtype=np.float32))
+        if edges.size == 0:
+            mn = np.min(col)
+            mx = np.max(col)
+            edges = np.array([mn, mx], dtype=np.float32)
+        bins.append(tf.convert_to_tensor(edges.astype(np.float32)))
+    return bins
