@@ -124,7 +124,8 @@ def build_model(input_dim, n_layers, units, embedding_method, embed_dim=12, n_bi
     #     ))
     #     model.add(keras.layers.Flatten())
     else:
-        raise ValueError(f"Unknown embedding_method: {embedding_method}")
+        # No embedding, use raw inputs
+        pass
 
     # If you’re using SELU, pair with lecun_normal + AlphaDropout (recommended for SELU)
     for _ in range(n_layers):
