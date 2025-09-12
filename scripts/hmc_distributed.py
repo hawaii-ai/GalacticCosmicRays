@@ -11,7 +11,6 @@ os.environ["JAX_PLATFORM_NAME"] = "cpu"  # CPU is faster for batchsize=1 inferen
 import utils as utils
 from preprocess import transform_input, untransform_input
 
-import keras_core as kerasjk
 import jax
 import jax.numpy as jnp
 from jax import random, vmap, jit, grad
@@ -24,6 +23,8 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow_probability.substrates import jax as tfp
 tfd = tfp.distributions
+# import keras_core as keras
+from tensorflow import keras # This avoids problems with tf.keras and keras_core versions of model saves and loads
 
 # Run in DEBUG mode if there is no slurm task id.
 try:
@@ -225,7 +226,7 @@ if mcmc_or_hmc == 'hmc':
 # Get NN predictions on these samples.
 specified_parameters_transformed = transform_input(np.array(specified_parameters).reshape((1,-1)))
 xs = utils._form_batch(samples_transformed, specified_parameters_transformed)
-model = kerasjk.models.load_model(model_path)
+model = keras.models.load_model(model_path)
 predictions_transformed = model.predict(xs, verbose=2)
 predictions = utils.untransform_output(predictions_transformed)
 np.savetxt(fname=f'{results_dir}/predictions_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=predictions, delimiter=',')

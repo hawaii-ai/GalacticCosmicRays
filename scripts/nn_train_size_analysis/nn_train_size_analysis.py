@@ -3,18 +3,24 @@ Train both the positive and negative NN with varying amounts of the training dat
 """
 # Imports
 import os
-from collections import defaultdict
-import numpy as np
-import h5py
-import matplotlib.pyplot as plt
 import datetime
-import argparse
-
-import keras_core as keras
-
+import h5py
+import numpy as np
+# import keras_core as keras
+import tensorflow as tf
 import tensorflow_io as tfio
+from tensorflow import keras # This avoids problems with tf.keras and keras_core versions of model saves and loads
 from tensorflow.data import Dataset
 from tensorflow.data.experimental import AUTOTUNE
+from optuna.storages import JournalStorage, JournalFileStorage
+
+from rtdl_num_embeddings_tf import (
+    LinearEmbeddings,
+    LinearReLUEmbeddings,
+    PeriodicEmbeddings,
+    PiecewiseLinearEmbeddings,
+    compute_bins,
+)
 
 def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
     # 8 input parameters for the NN: alpha, cmf, vspoles, cpa, pwr1par, pwr2par, pwr1perr, and pwr2perr.
@@ -41,6 +47,9 @@ def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
 
     # Get number of training samples (from the dataset)
     train_size = int(np.floor(num_train_samples * train_size_fraction))
+    print(f"Number of training samples: {train_size} out of {num_train_samples} total")
+    print(f"Number of test samples: {num_test_samples}")
+
 
     # Choose seed based on model version
     data_seeds = {
@@ -90,15 +99,45 @@ def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
     train = train.batch(batch_size, drop_remainder=True).prefetch(AUTOTUNE)
     test = test.batch(batch_size, drop_remainder=True).prefetch(AUTOTUNE)
 
-    return train, test, train_size, num_test_samples, batch_size
+    return train, test, train_size, num_test_samples, batch_size, num_inputs
 
-def build_model(n_layers, n_units):
-    model = keras.Sequential()
-    model.add(keras.Input(shape=(8,)))
+def build_model(input_dim, n_layers, units, embedding_method, embed_dim=12, n_bins=48):
+    print(f"Building model with embedding {embedding_method}, {n_layers} layers, and {units} units per layer")
+
+    model = keras.Sequential([keras.Input(shape=(input_dim,), dtype="float32")])
+
+    # Tabular embedding layer
+    if embedding_method == "linear":
+        model.add(LinearEmbeddings(input_dim, embed_dim))
+        model.add(keras.layers.Flatten())
+    elif embedding_method == "linear_relu":
+        model.add(LinearReLUEmbeddings(input_dim, embed_dim))
+        model.add(keras.layers.Flatten())
+    elif embedding_method == "periodic":
+        # Defaults: k=64, sigma=0.02, activation=True (you can change)
+        model.add(PeriodicEmbeddings(input_dim, embed_dim))
+        model.add(keras.layers.Flatten())
+    # TODO: fix piecewise_linear embedding (currently returning NaN loss)
+    # elif embedding_method in {"piecewise_linear", "piecewise_linear_relu"}:
+    #     # Compute bins **once** outside the training loop; pass numpy or a dense tensor
+    #     bins = compute_bins(x_train, n_bins)
+    #     model.add(PiecewiseLinearEmbeddings(
+    #         bins, embed_dim,
+    #         activation=(embedding_method == "piecewise_linear_relu"),
+    #         version="B"  # residual linear, as in your code
+    #     ))
+    #     model.add(keras.layers.Flatten())
+    else:
+        # No embedding, use raw inputs
+        pass
+
+    # If you’re using SELU, pair with lecun_normal + AlphaDropout (recommended for SELU)
     for _ in range(n_layers):
-        model.add(keras.layers.Dense(n_units, activation="selu"))
-    model.add(keras.layers.Dense(32, activation="linear"))
+        model.add(keras.layers.Dense(units, activation="selu", kernel_initializer="lecun_normal"))
+        # optional:
+        # model.add(keras.layers.AlphaDropout(0.05))
 
+    model.add(keras.layers.Dense(32, activation="linear"))
     return model
 
 def main():
@@ -115,16 +154,12 @@ def main():
 
     print(f'Polarity: {args.polarity}, Train size fraction: {args.train_size_fraction}, Bootstrap: {args.bootstrap}, Model version: {args.model_version}, Data version: {args.data_version}')
 
-    train, test, train_size, num_test_samples, batch_size = load_dataset(
+    train, test, train_size, num_test_samples, batch_size, num_inputs = load_dataset(
         polarity=args.polarity,
         bootstrap=args.bootstrap,
         data_version=args.data_version, 
         train_size_fraction=args.train_size_fraction
     )
-
-    # Some calcs
-    steps_per_epoch = train_size // batch_size
-    validation_steps = num_test_samples // batch_size
 
     # Create save and log directories
     save_name = f'data_{args.data_version}_bootstrap_{args.bootstrap}_model_{args.model_version}_train_size_{args.train_size_fraction}_{args.polarity}'
@@ -146,6 +181,9 @@ def main():
     weight_decay = 3.251785236175247e-06
     n_layers = 10
     n_units = 1024
+    embedding_method = "none"  # "none", "linear_relu", "periodic", "piecewise_linear_relu"
+    embed_dim = 12
+    n_bins = 48
 
     # Callbacks
     callbacks = [
@@ -156,7 +194,14 @@ def main():
     ]
 
     # Define model and compile
-    model = build_model(n_layers=n_layers, n_units=n_units)
+    model = build_model(
+        input_dim=num_inputs,
+        n_layers=n_layers, 
+        units=n_units,
+        embedding_method=embedding_method,
+        embed_dim=embed_dim,
+        n_bins=n_bins
+    )
     optimizer = keras.optimizers.AdamW(learning_rate=learning_rate, weight_decay=weight_decay)
     model.compile(optimizer=optimizer, loss='mae', metrics=['mse'])
 
@@ -165,8 +210,6 @@ def main():
         train,
         epochs=1_000,
         validation_data=test,
-        steps_per_epoch=steps_per_epoch,
-        validation_steps=validation_steps,
         shuffle=False,
         verbose=2,
         callbacks=callbacks

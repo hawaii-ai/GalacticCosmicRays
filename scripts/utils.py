@@ -17,7 +17,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import jax
 import jax.numpy as jnp            
-import keras_core as keras
+# import keras_core as keras
+from tensorflow import keras # This avoids problems with tf.keras and keras_core versions of model saves and loads
 
 def index_mcmc_runs(file_version):
     """Make a list of combinations for which we want to run MCMC."""
