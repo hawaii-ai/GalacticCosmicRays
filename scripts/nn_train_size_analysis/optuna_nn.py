@@ -98,7 +98,7 @@ def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
     return train, test, train_size, num_test_samples, batch_size, num_inputs
 
 def build_model(input_dim, n_layers, units, embedding_method, embed_dim=12, n_bins=48):
-    print(f"Building model with embedding {embedding_method}, {n_layers} layers, and {units} units per layer")
+    print(f"Building model with embedding {embedding_method}, {n_layers} layers, {units} units per layer, embed_dim {embed_dim}, and n_bins {n_bins}")
 
     model = keras.Sequential([keras.Input(shape=(input_dim,), dtype="float32")])
 
@@ -168,7 +168,7 @@ def objective(trial):
     # x_final_train_tensor = tf.convert_to_tensor(x_final_train, dtype=tf.float32)
 
     # Get trial hyperparameters
-    n_layers = trial.suggest_int("n_layers", 3, 10)
+    n_layers = trial.suggest_int("n_layers", 3, 8)
     units = trial.suggest_categorical("units", [512, 1024, 2048, 4096])
     embedding_method = trial.suggest_categorical("embedding_method", [
         "none",
@@ -176,9 +176,10 @@ def objective(trial):
         "periodic",
         # "piecewise_linear_relu"
     ])
+    embed_dim = trial.suggest_int("embed_dim", 4, 32)
 
     # Define model
-    model = build_model(num_inputs, n_layers, units, embedding_method)
+    model = build_model(num_inputs, n_layers, units, embedding_method, embed_dim=embed_dim)
     print(model.summary())
 
     # Compile model

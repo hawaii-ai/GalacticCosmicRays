@@ -5,12 +5,12 @@
 ##SBATCH --account=sadow
 
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=2
-#SBATCH --mem=18gb ## max amount of memory per node you require
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=36gb ## max amount of memory per node you require
 #SBATCH --time=03-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on sadow
 
 #SBATCH --job-name=nn_besthp
-#SBATCH --output=./logs/optuna-july292025-%A.out
+#SBATCH --output=./logs/optuna-september12-%A.out
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=linneamw@hawaii.edu
 

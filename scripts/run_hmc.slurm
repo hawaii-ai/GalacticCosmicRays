@@ -5,10 +5,10 @@
 #SBATCH --partition=shared # koa, sadow, gpu, shared, kill-shared, exclusive-long
 ##SBATCH --account=sadow
 
-#SBATCH --array=0-132 ## Negative intervals only 0-132 and for new yearly data that's 0-14, for old data negative + positive intervals it's 0-209
+#SBATCH --array=0,24,84,131 ## Negative intervals only 0-132 and for new yearly data that's 0-14, for old data negative + positive intervals it's 0-209
 ##BATCH --gres=gpu:1
 #SBATCH --cpus-per-task=1
-#SBATCH --mem=7gb ## max amount of memory per node you require
+#SBATCH --mem=5gb ## max amount of memory per node you require
 #SBATCH --time=3-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on exclusive-long, 14day max on sadow, 30day max on koa
 
 #SBATCH --job-name=best_hmc ## Job name
@@ -21,7 +21,7 @@
 echo This is job $SLURM_ARRAY_JOB_ID task $SLURM_ARRAY_TASK_ID running on $HOSTNAME
 echo $(date +%F-%H-%M-%S)
 echo Running hmc_version $HMC_VERSION with train_size $TRAIN_SIZE model_version $MODEL_VERSION data version $DATA_VERSION bootstrap $BOOTSTRAP regularizer $REGULARIZER
-echo Integrate $INTEGRATE par_equals_perr $PAR_EQUALS_PERR constant_vspoles $CONSTANT_VSPOLES File version $FILE_VERSION
+echo Integrate $INTEGRATE par_equals_perr $PAR_EQUALS_PERR constant_vspoles $CONSTANT_VSPOLES File version $FILE_VERSION NN Model save dir $MODEL_SAVE_DIR
 
 # Load python profile, then call python script passing SLURM_ARRAY_TASK_ID as an argument.
 source ~/profiles/auto.profile

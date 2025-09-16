@@ -5,8 +5,8 @@
 #SBATCH --account=sadow
 
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=6
-#SBATCH --mem=64gb ## max amount of memory per node you require
+#SBATCH --cpus-per-task=4 ## number of CPU cores per task
+#SBATCH --mem=72gb ## max amount of memory per node you require
 #SBATCH --time=07-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on sadow
 
 #SBATCH --job-name=optuna

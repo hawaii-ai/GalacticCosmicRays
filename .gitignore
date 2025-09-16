@@ -37,3 +37,7 @@ models/model_size_investigation
 # Data
 *.h5
 *.csv
+
+# Results
+*.png
+*.pdf
