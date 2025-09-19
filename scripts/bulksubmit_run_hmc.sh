@@ -52,6 +52,25 @@ for train_size in "${train_sizes[@]}"; do
   # Submit a new job
   data_version='d1' # 'd1', 'd2'
   bootstrap='b1' # 'b0' or 'b1'
+  model_version='init1' # 'init1', 'init2'
+  hmc_run='hmc3' # 'hmc1', 'hmc2'
+  hmc_version="${hmc_version_number}/${data_version}_${bootstrap}_${model_version}_${hmc_run}_${train_size}"
+
+  export MODEL_VERSION=$model_version
+  export HMC_VERSION=$hmc_version
+  export FILE_VERSION=$file_version
+  export INTEGRATE=$integrate
+  export PAR_EQUALS_PERR=$par_equals_perr
+  export CONSTANT_VSPOLES=$constant_vspoles
+  export TRAIN_SIZE=$train_size
+  export DATA_VERSION=$data_version
+  export BOOTSTRAP=$bootstrap
+  export MODEL_SAVE_DIR=$model_save_dir
+  sbatch --export=ALL run_hmc.slurm
+
+  # Submit a new job
+  data_version='d1' # 'd1', 'd2'
+  bootstrap='b1' # 'b0' or 'b1'
   model_version='init2' # 'init1', 'init2'
   hmc_run='hmc1' # 'hmc1', 'hmc2'
   hmc_version="${hmc_version_number}/${data_version}_${bootstrap}_${model_version}_${hmc_run}_${train_size}"

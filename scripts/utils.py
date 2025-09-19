@@ -3,6 +3,7 @@ Utilities for running the MCMC.
 Most of the training data details are imported from preprocess.py
 These utils focus on the observation data. 
 """
+import sys
 import preprocess as preprocess
 from preprocess import INPUTS, PARAMETERS, PARAMETERS_SPECIFIED, RIGIDITY_VALS
 from preprocess import transform_input, untransform_input
@@ -16,9 +17,16 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import pandas as pd
 import jax
-import jax.numpy as jnp            
-# import keras_core as keras
-from tensorflow import keras # This avoids problems with tf.keras and keras_core versions of model saves and loads
+import jax.numpy as jnp      
+
+import keras_core as keras
+
+sys.path.append('./nn_train_size_analysis/')
+from rtdl_num_embeddings_tf import (
+    LinearEmbeddings,
+    LinearReLUEmbeddings,
+    PeriodicEmbeddings,
+)
 
 def index_mcmc_runs(file_version):
     """Make a list of combinations for which we want to run MCMC."""

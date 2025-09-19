@@ -7,10 +7,9 @@ import datetime
 import h5py
 import numpy as np
 import argparse
-# import keras_core as keras
+import keras_core as keras
 import tensorflow as tf
 import tensorflow_io as tfio
-from tensorflow import keras # This avoids problems with tf.keras and keras_core versions of model saves and loads
 from tensorflow.data import Dataset
 from tensorflow.data.experimental import AUTOTUNE
 from optuna.storages import JournalStorage, JournalFileStorage

@@ -5,6 +5,7 @@ Updated: Linnea March 2025 (and many times since)
 """
 
 import os
+import sys
 os.environ["KERAS_BACKEND"] = "jax"  # Must be specified before loading keras_core
 os.environ["JAX_PLATFORM_NAME"] = "cpu"  # CPU is faster for batchsize=1 inference.
 
@@ -23,9 +24,14 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow_probability.substrates import jax as tfp
 tfd = tfp.distributions
-# import keras_core as keras
-from tensorflow import keras # This avoids problems with tf.keras and keras_core versions of model saves and loads
+import keras_core as keras
 
+sys.path.append('./nn_train_size_analysis/')
+from rtdl_num_embeddings_tf import (
+    LinearEmbeddings,
+    LinearReLUEmbeddings,
+    PeriodicEmbeddings,
+)
 # Run in DEBUG mode if there is no slurm task id.
 try:
     SLURM_ARRAY_TASK_ID = int(os.environ['SLURM_ARRAY_TASK_ID'])

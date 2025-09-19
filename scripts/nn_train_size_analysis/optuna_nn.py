@@ -5,8 +5,7 @@ import numpy as np
 import optuna
 import tensorflow as tf
 import tensorflow_io as tfio
-# import keras_core as keras
-from tensorflow import keras # This avoids problems with tf.keras and keras_core versions of model saves and loads
+import keras_core as keras
 from tensorflow.data import Dataset
 from tensorflow.data.experimental import AUTOTUNE
 from optuna.storages import JournalStorage, JournalFileStorage
@@ -15,8 +14,6 @@ from rtdl_num_embeddings_tf import (
     LinearEmbeddings,
     LinearReLUEmbeddings,
     PeriodicEmbeddings,
-    PiecewiseLinearEmbeddings,
-    compute_bins,
 )
 
 def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
