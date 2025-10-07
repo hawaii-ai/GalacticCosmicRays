@@ -6,8 +6,8 @@ file_version='2023' # 2024 is the yearly data, 2023 is the old data
 integrate='false' # If False, Chi2 is interpolated. If True, Chi2 is integrated.
 par_equals_perr='false' # If True, only 3 parameters will be sampled by the HMC and pwr1par==pwr1perr and pwr2par==pwr2perr
 constant_vspoles='false' # If True, vspoles is fixed to 400.0. If False, vspoles is specified in the data file.
-hmc_version_number='v33_09122025optuna'
-model_save_dir='../models/model_size_investigation_optuna_09122025' # Remember to update!
+hmc_version_number='v33_optuna_lessburnin'
+model_save_dir='../models/model_size_investigation_optuna_09122025_lowestlinearrelu' # Remember to update!
 
 # Run 
 for train_size in "${train_sizes[@]}"; do

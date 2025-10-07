@@ -217,7 +217,7 @@ def remove_consecutive_duplicates(samples, aux=[], atol=0.0):
     Remove consecutive duplicate rows from array. This means sample from MCMC was rejected.
     Args:
         samples = 2d array, where each row is a sample
-        aux = list of additional 2d arrays containing information that we want to subset.
+        aux = dictionary of additional 2d arrays containing information that we want to subset.
         atol = absolute tolerance for being equal
     Returns:
         rval = 2d array with consecutive duplicate rows removed
@@ -225,13 +225,15 @@ def remove_consecutive_duplicates(samples, aux=[], atol=0.0):
     consecutive_repeat_rows = np.all(np.isclose(samples[1:,:], samples[:-1,:], atol=atol, rtol=0.0), axis=1)
     # The first sample is not a repeat by definition.
     consecutive_repeat_rows = np.concatenate([np.array([False]), consecutive_repeat_rows])
-    if len(aux) == 0:
+    
+    # if aux is empty, just return samples
+    if len(aux.items()) == 0:
         return samples[~consecutive_repeat_rows, :]
     else:
-        aux_return = []
-        for a in aux:
+        aux_return = {}
+        for key, a in aux.items():
             a = a[~consecutive_repeat_rows, ...]
-            aux_return.append(a)
+            aux_return[key] = a
         return samples[~consecutive_repeat_rows, :], aux_return
 
 

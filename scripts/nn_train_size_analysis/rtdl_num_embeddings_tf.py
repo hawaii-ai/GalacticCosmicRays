@@ -91,6 +91,13 @@ class LinearReLUEmbeddings(keras.layers.Layer):
         self.linear = LinearEmbeddings(n_features, d_embedding)
         self.relu = keras.layers.ReLU()
 
+    def build(self, input_shape):
+        # Build sublayers with known static shapes
+        self.linear.build(input_shape)  # (B, F) -> (B, F, d_embed)
+        out_shape = tuple(input_shape[:-1]) + (self.n_features, self.d_embedding)
+        self.relu.build(out_shape)
+        super().build(input_shape)
+
     def call(self, x):
         return self.relu(self.linear(x))
 
@@ -217,6 +224,18 @@ class PeriodicEmbeddings(keras.layers.Layer):
         self.linear = _NLinear(n_features, 2 * k, d_embedding, bias=True)
         self.activation = keras.layers.ReLU() if activation else None
         self.linear0 = LinearEmbeddings(n_features, d_embedding) if version == "B" else None
+
+    def build(self, input_shape):
+        # Input: (B, F)
+        self.periodic.build(input_shape)  # -> (B, F, 2k)
+        periodic_out = tuple(input_shape[:-1]) + (self.n_features, 2*self.k)
+        self.linear.build(periodic_out)   # -> (B, F, d_embedding)
+        if self.linear0 is not None:
+            self.linear0.build(input_shape)
+        if self.activation is not None:
+            act_in = tuple(input_shape[:-1]) + (self.n_features, self.d_embedding)
+            self.activation.build(act_in)
+        super().build(input_shape)
 
     def call(self, x):
         _check_input_shape(x, self.n_features)

@@ -24,6 +24,8 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow_probability.substrates import jax as tfp
 tfd = tfp.distributions
+import tensorflow_probability
+xmcmc = tensorflow_probability.experimental.mcmc
 import keras_core as keras
 
 sys.path.append('./nn_train_size_analysis/')
@@ -111,19 +113,21 @@ target_log_prob = utils.define_log_prob(model_path, data_path, specified_paramet
 if DEBUG:
     # For running interactive tests.
     mcmc_or_hmc = 'hmc' # 'mcmc' or 'hmc'
-    num_results = 100 #150000 #500000 # 10k takes 11min. About 1/5 of these accepted? now .97
+    num_results = 500 
     num_steps_between_results = 0 # Thinning
-    num_burnin_steps = 100 #500
-    num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
-    step_size = 1e-3 # 1e-3 (experiment?) # 1e-5 has 0.95 acc rate and moves. 1e-4 0.0 acc.
-    max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
-    max_energy_diff = 1000 #1e32 #1e21 # Default 1000.0. Divergent samples are those that exceed this.
+    num_burnin_steps = 100 # Number of steps before beginning sampling
+    num_adaptation_steps = np.floor(.8*num_burnin_steps) # Default is .8*num_burnin_steps. Somewhat smaller than number of burnin
+    step_size = 1e-3 # Smaller values raise acceptance, but mean the space is not explored as well. Automatically shrinks step size to achieve target_accept_prob
+    target_accept_prob = 0.75 # Default is 0.75, normally want between 0.6-0.9
+    max_tree_depth = 10 # Default 10. Smaller results in shorter steps. Larger takes memory.
+    max_energy_diff = 1000 # Default 1000.0. Divergent samples are those that exceed this.
     unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
+
 else:
     mcmc_or_hmc = 'hmc' # 'mcmc' or 'hmc'
-    num_results = 110_000 #110_000 for hmc, 400_000 for mcmc
-    num_steps_between_results = 100 # Thinning
-    num_burnin_steps = 100_000 # Number of steps before beginning sampling
+    num_results = 100_000 #110_000 for hmc, 400_000 for mcmc
+    num_steps_between_results = 10 # Thinning
+    num_burnin_steps = 1_000 # Number of steps before beginning sampling
 
     # Note: this is just for mcmc
     scale = 1e-2
@@ -134,18 +138,21 @@ else:
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
     max_energy_diff = 1000 # Default 1000.0. Divergent samples are those that exceed this.
     unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
+    target_accept_prob = 0.75 # the automatic value
 
 @jit
 def run_chain(key, state):
     if mcmc_or_hmc == 'mcmc':
         # Kernel for MCMC is RandomWalkMetropolis
-        kernel = tfp.mcmc.RandomWalkMetropolis(
+        base_kernel = tfp.mcmc.RandomWalkMetropolis(
             target_log_prob_fn=target_log_prob,
             new_state_fn=tfp.mcmc.random_walk_normal_fn(scale=scale),
         )
 
-        def trace_fn(_, pkr):
-            return [pkr.log_accept_ratio]
+        def traced_fields(_, pkr):
+            return {
+                'log_accept_ratio': pkr.inner_results.log_accept_ratio,
+            }
         
     else:
         # Kernel for HMC is NoUTurnSampler
@@ -156,15 +163,9 @@ def run_chain(key, state):
             max_energy_diff=max_energy_diff, 
             unrolled_leapfrog_steps=unrolled_leapfrog_steps
         )
-        target_accept_prob = 0.75 # the automatic value
     
-        def trace_fn(_, pkr):
-            return [pkr.log_accept_ratio,
-                    pkr.target_log_prob,
-                    pkr.step_size]
-
         # Adjust step size of mcmc kernel to have noisy steps
-        kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(
+        base_kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(
             inner_kernel,
             num_adaptation_steps=num_adaptation_steps,
             step_size_setter_fn=lambda pkr, new_step_size: pkr._replace(step_size=new_step_size),
@@ -173,11 +174,38 @@ def run_chain(key, state):
             target_accept_prob=target_accept_prob
         )
 
-        def trace_fn(_, pkr):
-            return [pkr.inner_results.log_accept_ratio,
-                    pkr.inner_results.target_log_prob,
-                    pkr.inner_results.step_size]
+        if not DEBUG:
+            def traced_fields(_, pkr):
+                return {
+                    'log_accept_ratio': pkr.inner_results.log_accept_ratio,
+                    'target_log_prob': pkr.inner_results.target_log_prob,
+                    'step_size': pkr.inner_results.step_size
+                }
+        else:
+            def traced_fields(_, pkr):
+                # Trace all possible items. Possibilities:
+                # 'count', 'energy', 'grads_target_log_prob', 'has_divergence', 'index', 'is_accepted', 'leapfrogs_taken', 'log_accept_ratio', 'reach_max_depth', 'seed', 'step_size', 'target_log_prob'
+                # count, index, seed, and grads_target_log_prob give errors if traced
+                return {
+                    'log_accept_ratio': pkr.inner_results.log_accept_ratio,
+                    'target_log_prob': pkr.inner_results.target_log_prob,
+                    'step_size': pkr.inner_results.step_size,
+                    'is_accepted': pkr.inner_results.is_accepted,
+                    'energy': pkr.inner_results.energy,
+                    'has_divergence': pkr.inner_results.has_divergence,
+                    'leapfrogs_taken': pkr.inner_results.leapfrogs_taken,
+                    'reach_max_depth': pkr.inner_results.reach_max_depth,
+                }
+
+    # With reductions means we have to unwrap once more
+    def trace_fn(_, pkr):
+        pkr = pkr.inner_results
+        return traced_fields(_, pkr)
     
+    # add progress bar to the kernel
+    progress = xmcmc.ProgressBarReducer(num_results=num_results)  # prints one line that updates 
+    kernel = xmcmc.WithReductions(base_kernel, progress)
+
     # Run the mcmc chain
     samples, pkr = tfp.mcmc.sample_chain(
         num_results=num_results,
@@ -201,10 +229,6 @@ samples_transformed_all, pkr_all = run_chain(key, state)
 # Remove duplicates.
 samples_transformed, pkr = utils.remove_consecutive_duplicates(samples_transformed_all, pkr_all, atol=0.0)
 
-# Different values are traced and returned depending on mcmc or hmc
-if mcmc_or_hmc == 'mcmc': log_accept_ratio  = pkr
-else: log_accept_ratio, log_probs, step_sizes = pkr
-
 print('Finished in %d minutes.' % int((time.time() - start_time)//60))
 print(f'Acceptance rate: {len(samples_transformed)/len(samples_transformed_all)}. Decrease step_size to increase rate.')
 
@@ -222,19 +246,35 @@ if par_equals_perr:
 # Inverse transform samples.
 samples = utils.untransform_input(samples_transformed)
 
-# Save results: samples and plots
-np.savetxt(fname=f'{results_dir}/samples_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=samples, delimiter=',')
-np.savetxt(fname=f'{results_dir}/logacceptratio_{SLURM_ARRAY_TASK_ID}.csv', X=log_accept_ratio, delimiter=',')
-if mcmc_or_hmc == 'hmc':
-    np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_sizes, delimiter=',')
-    np.savetxt(fname=f'{results_dir}/logprobs_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=log_probs, delimiter=',')
+# Different values are traced and returned depending on mcmc or hmc
+if mcmc_or_hmc == 'mcmc': 
+    log_accept_ratio = pkr['log_accept_ratio']
+else: 
+    if DEBUG:
+        for key, a in pkr.items():
+            print(f'{key}: {a}, mean: {jnp.mean(a)}, std: {jnp.std(a)}, min: {jnp.min(a)}, max: {jnp.max(a)}\n\n')
+        print(f"Samples: {samples}")
 
-# Get NN predictions on these samples.
-specified_parameters_transformed = transform_input(np.array(specified_parameters).reshape((1,-1)))
-xs = utils._form_batch(samples_transformed, specified_parameters_transformed)
-model = keras.models.load_model(model_path)
-predictions_transformed = model.predict(xs, verbose=2)
-predictions = utils.untransform_output(predictions_transformed)
-np.savetxt(fname=f'{results_dir}/predictions_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=predictions, delimiter=',')
+    else:
+        log_accept_ratio = pkr['log_accept_ratio']
+        log_probs = pkr['target_log_prob']
+        step_sizes = pkr['step_size']
+
+# Generate samples and save results if not in DEBUG mode
+if not DEBUG:
+    # Save results: samples and plots
+    np.savetxt(fname=f'{results_dir}/samples_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=samples, delimiter=',')
+    np.savetxt(fname=f'{results_dir}/logacceptratio_{SLURM_ARRAY_TASK_ID}.csv', X=log_accept_ratio, delimiter=',')
+    if mcmc_or_hmc == 'hmc':
+        np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_sizes, delimiter=',')
+        np.savetxt(fname=f'{results_dir}/logprobs_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=log_probs, delimiter=',')
+
+    # Get NN predictions on these samples.
+    specified_parameters_transformed = transform_input(np.array(specified_parameters).reshape((1,-1)))
+    xs = utils._form_batch(samples_transformed, specified_parameters_transformed)
+    model = keras.models.load_model(model_path)
+    predictions_transformed = model.predict(xs, verbose=2)
+    predictions = utils.untransform_output(predictions_transformed)
+    np.savetxt(fname=f'{results_dir}/predictions_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=predictions, delimiter=',')
 
 

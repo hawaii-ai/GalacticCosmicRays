@@ -18,8 +18,6 @@ from rtdl_num_embeddings_tf import (
     LinearEmbeddings,
     LinearReLUEmbeddings,
     PeriodicEmbeddings,
-    PiecewiseLinearEmbeddings,
-    compute_bins,
 )
 
 def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
@@ -177,11 +175,11 @@ def main():
         os.makedirs(log_dir)
 
     # Model hyperparameters
-    learning_rate = 5.046907973190379e-05
-    weight_decay = 3.9697191911560466e-08
-    n_layers = 6
-    n_units = 4096
-    embedding_method = "linear_relu"  # "none", "linear_relu", "periodic", "piecewise_linear_relu"
+    learning_rate = 1.0081111005528605e-05
+    weight_decay = 2.740726942542479e-09
+    n_layers = 5
+    n_units = 2048
+    embedding_method = "periodic"  # "none", "linear_relu", "periodic", "piecewise_linear_relu"
     embed_dim = 12
     n_bins = 48
 
