@@ -10,10 +10,10 @@ from tensorflow.data import Dataset
 from tensorflow.data.experimental import AUTOTUNE
 from optuna.storages import JournalStorage, JournalFileStorage
 
-from rtdl_num_embeddings_tf import (
-    LinearEmbeddings,
-    LinearReLUEmbeddings,
+from rtdl_num_embeddings_keras import (
     PeriodicEmbeddings,
+    PiecewiseLinearEncoding,
+    PiecewiseLinearEmbeddings,
 )
 
 def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
@@ -94,32 +94,59 @@ def load_dataset(polarity, data_version, train_size_fraction, bootstrap):
 
     return train, test, train_size, num_test_samples, batch_size, num_inputs
 
-def build_model(input_dim, n_layers, units, embedding_method, embed_dim=12, n_bins=48):
-    print(f"Building model with embedding {embedding_method}, {n_layers} layers, {units} units per layer, embed_dim {embed_dim}, and n_bins {n_bins}")
+def build_model(input_dim, n_layers, units, embedding_method, embed_dim=12, n_bins=48, n_frequencies=8, value_range=None):
+    print(f"Building model with embedding {embedding_method}, {n_layers} layers, {units} units per layer, embed_dim {embed_dim}, n_bins {n_bins}, n_frequencies {n_frequencies}, value_range {value_range}")
 
     model = keras.Sequential([keras.Input(shape=(input_dim,), dtype="float32")])
 
     # Tabular embedding layer
-    if embedding_method == "linear":
-        model.add(LinearEmbeddings(input_dim, embed_dim))
-        model.add(keras.layers.Flatten())
-    elif embedding_method == "linear_relu":
-        model.add(LinearReLUEmbeddings(input_dim, embed_dim))
-        model.add(keras.layers.Flatten())
-    elif embedding_method == "periodic":
+    if embedding_method == "periodic":
         # Defaults: k=64, sigma=0.02, activation=True (you can change)
-        model.add(PeriodicEmbeddings(input_dim, embed_dim))
+        model.add(PeriodicEmbeddings(
+            n_features=input_dim,
+            n_frequencies=n_frequencies,
+            learnable_frequencies=True,
+            use_phase=True,
+            learnable_phases=True,
+        ))
         model.add(keras.layers.Flatten())
-    # TODO: fix piecewise_linear embedding (currently returning NaN loss)
-    # elif embedding_method in {"piecewise_linear", "piecewise_linear_relu"}:
-    #     # Compute bins **once** outside the training loop; pass numpy or a dense tensor
-    #     bins = compute_bins(x_train, n_bins)
-    #     model.add(PiecewiseLinearEmbeddings(
-    #         bins, embed_dim,
-    #         activation=(embedding_method == "piecewise_linear_relu"),
-    #         version="B"  # residual linear, as in your code
-    #     ))
-    #     model.add(keras.layers.Flatten())
+    elif embedding_method == "piecewise_encoding":
+        if value_range is None:
+            model.add(PiecewiseLinearEncoding(
+                n_features=input_dim,
+                n_bins=n_bins,
+                use_adaptive_range=True,
+                clip=True,
+            ))
+        else:
+            model.add(PiecewiseLinearEncoding(
+                n_features=input_dim,
+                n_bins=n_bins,
+                use_adaptive_range=False,
+                value_range=value_range,
+                clip=True,
+            ))
+    elif embedding_method == "piecewise_embedding":
+        if value_range is None:
+            model.add(PiecewiseLinearEmbeddings(
+                n_features=input_dim,
+                n_bins=n_bins,
+                d_embedding=embed_dim,
+                activation=True,          # ReLU(Linear(PLE))
+                use_adaptive_range=True,
+                clip=True,
+            ))
+        else:
+            model.add(PiecewiseLinearEmbeddings(
+                n_features=input_dim,
+                n_bins=n_bins,
+                d_embedding=embed_dim,
+                activation=True,          # ReLU(Linear(PLE))
+                use_adaptive_range=False,
+                value_range=value_range,
+                clip=True,
+            ))
+        model.add(keras.layers.Flatten())
     else:
         # No embedding, use raw inputs
         pass
@@ -153,30 +180,37 @@ def objective(trial):
         args["polarity"], args["data_version"], args["train_size_fraction"], args["bootstrap"]
     )
 
-    # Commented out due to issue with piecewise linear embeddings
-    # # Get x_final_train from the zipped and shuffled and batched train
-    # # Collect all batches into memory
-    # x_batches = []
-    # for x_batch, _ in train:   # iterate through the dataset
-    #     x_batches.append(x_batch.numpy())  # convert to numpy
-
-    # # Concatenate into a single array
-    # x_final_train = np.concatenate(x_batches, axis=0)
-    # x_final_train_tensor = tf.convert_to_tensor(x_final_train, dtype=tf.float32)
+    # For piecewise linear embeddings, we need to provide the value range (min, max) for each feature.
+    # All input data is min-max scaled already
+    n_features = 8
+    mins = np.zeros(n_features, dtype="float32")
+    maxs = np.ones(n_features, dtype="float32")
+    value_range = (mins, maxs)
 
     # Get trial hyperparameters
     n_layers = trial.suggest_int("n_layers", 3, 8)
     units = trial.suggest_categorical("units", [512, 1024, 2048, 4096])
     embedding_method = trial.suggest_categorical("embedding_method", [
         "none",
-        "linear_relu",
         "periodic",
-        # "piecewise_linear_relu"
+        "piecewise_encoding",
+        "piecewise_embedding",
     ])
+    n_frequencies = trial.suggest_int("n_frequencies", 4, 16)
+    n_bins = trial.suggest_int("n_bins", 4, 16)
     embed_dim = trial.suggest_int("embed_dim", 4, 32)
 
     # Define model
-    model = build_model(num_inputs, n_layers, units, embedding_method, embed_dim=embed_dim)
+    model = build_model(
+        num_inputs, 
+        n_layers, 
+        units, 
+        embedding_method,
+        embed_dim=embed_dim, 
+        n_frequencies=n_frequencies, 
+        n_bins=n_bins, 
+        value_range=value_range
+    )
     print(model.summary())
 
     # Compile model

@@ -28,6 +28,7 @@ import tensorflow_probability
 xmcmc = tensorflow_probability.experimental.mcmc
 import keras_core as keras
 
+# TODO: this is not yet updated to use the rtdl_num_embeddings_keras version
 sys.path.append('./nn_train_size_analysis/')
 from rtdl_num_embeddings_tf import (
     LinearEmbeddings,
@@ -117,11 +118,13 @@ if DEBUG:
     num_steps_between_results = 0 # Thinning
     num_burnin_steps = 100 # Number of steps before beginning sampling
     num_adaptation_steps = np.floor(.8*num_burnin_steps) # Default is .8*num_burnin_steps. Somewhat smaller than number of burnin
-    step_size = 1e-3 # Smaller values raise acceptance, but mean the space is not explored as well. Automatically shrinks step size to achieve target_accept_prob
+    step_size = 1e-4 # Smaller values raise acceptance, but mean the space is not explored as well. Automatically shrinks step size to achieve target_accept_prob
     target_accept_prob = 0.75 # Default is 0.75, normally want between 0.6-0.9
     max_tree_depth = 10 # Default 10. Smaller results in shorter steps. Larger takes memory.
     max_energy_diff = 1000 # Default 1000.0. Divergent samples are those that exceed this.
     unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
+
+    scale = 1e-2 # for mcmc
 
 else:
     mcmc_or_hmc = 'hmc' # 'mcmc' or 'hmc'
@@ -139,6 +142,9 @@ else:
     max_energy_diff = 1000 # Default 1000.0. Divergent samples are those that exceed this.
     unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
     target_accept_prob = 0.75 # the automatic value
+
+print(f'Running {mcmc_or_hmc} with {num_results} samples, {num_burnin_steps} burn-in steps, and {num_steps_between_results} steps between results.')
+print(f'Hyperparameters: step_size={step_size}, max_tree_depth={max_tree_depth}, max_energy_diff={max_energy_diff}, unrolled_leapfrog_steps={unrolled_leapfrog_steps}, target_accept_prob={target_accept_prob}, num_adaptation_steps={num_adaptation_steps}, and scale={scale}.')
 
 @jit
 def run_chain(key, state):
