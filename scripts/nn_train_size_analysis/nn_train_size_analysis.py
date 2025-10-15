@@ -202,14 +202,14 @@ def main():
         os.makedirs(log_dir)
 
     # Model hyperparameters
-    learning_rate = 1.0081111005528605e-05
-    weight_decay = 2.740726942542479e-09
-    n_layers = 5
-    n_units = 2048
+    learning_rate = 6.312189704655289e-05
+    weight_decay = 2.4354575566552583e-05
+    n_layers = 6
+    n_units = 4096
     embedding_method = "periodic"  # "none", "periodic", "piecewise_embedding", "piecewise_encoding"
-    embed_dim = 12
-    n_frequencies = 8
-    n_bins = 48
+    n_frequencies = 10
+    n_bins = 8
+    embed_dim = 11
 
     # For piecewise linear embeddings, we need to provide the value range (min, max) for each feature.
     # All input data is min-max scaled already

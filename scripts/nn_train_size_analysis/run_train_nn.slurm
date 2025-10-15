@@ -1,8 +1,8 @@
 #!/bin/bash
 # See https://slurm.schedmd.com/job_array.html
 
-#SBATCH --partition=gpu # sadow, gpu, kill-shared, shared
-##SBATCH --account=sadow
+#SBATCH --partition=sadow # sadow, gpu, kill-shared, shared
+#SBATCH --account=sadow
 
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
@@ -10,7 +10,7 @@
 #SBATCH --time=03-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on sadow
 
 #SBATCH --job-name=nn_besthp
-#SBATCH --output=./logs/optuna-september12-%A.out
+#SBATCH --output=./logs/optuna-october14-%A.out
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=linneamw@hawaii.edu
 

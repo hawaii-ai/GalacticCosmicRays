@@ -28,13 +28,14 @@ import tensorflow_probability
 xmcmc = tensorflow_probability.experimental.mcmc
 import keras_core as keras
 
-# TODO: this is not yet updated to use the rtdl_num_embeddings_keras version
+# Load tabular embedding layers
 sys.path.append('./nn_train_size_analysis/')
-from rtdl_num_embeddings_tf import (
-    LinearEmbeddings,
-    LinearReLUEmbeddings,
+from rtdl_num_embeddings_keras import (
     PeriodicEmbeddings,
+    PiecewiseLinearEncoding,
+    PiecewiseLinearEmbeddings,
 )
+
 # Run in DEBUG mode if there is no slurm task id.
 try:
     SLURM_ARRAY_TASK_ID = int(os.environ['SLURM_ARRAY_TASK_ID'])
@@ -118,7 +119,7 @@ if DEBUG:
     num_steps_between_results = 0 # Thinning
     num_burnin_steps = 100 # Number of steps before beginning sampling
     num_adaptation_steps = np.floor(.8*num_burnin_steps) # Default is .8*num_burnin_steps. Somewhat smaller than number of burnin
-    step_size = 1e-4 # Smaller values raise acceptance, but mean the space is not explored as well. Automatically shrinks step size to achieve target_accept_prob
+    step_size = 1e-1 # Smaller values raise acceptance, but mean the space is not explored as well. Automatically shrinks step size to achieve target_accept_prob
     target_accept_prob = 0.75 # Default is 0.75, normally want between 0.6-0.9
     max_tree_depth = 10 # Default 10. Smaller results in shorter steps. Larger takes memory.
     max_energy_diff = 1000 # Default 1000.0. Divergent samples are those that exceed this.
@@ -180,28 +181,20 @@ def run_chain(key, state):
             target_accept_prob=target_accept_prob
         )
 
-        if not DEBUG:
-            def traced_fields(_, pkr):
-                return {
-                    'log_accept_ratio': pkr.inner_results.log_accept_ratio,
-                    'target_log_prob': pkr.inner_results.target_log_prob,
-                    'step_size': pkr.inner_results.step_size
-                }
-        else:
-            def traced_fields(_, pkr):
-                # Trace all possible items. Possibilities:
-                # 'count', 'energy', 'grads_target_log_prob', 'has_divergence', 'index', 'is_accepted', 'leapfrogs_taken', 'log_accept_ratio', 'reach_max_depth', 'seed', 'step_size', 'target_log_prob'
-                # count, index, seed, and grads_target_log_prob give errors if traced
-                return {
-                    'log_accept_ratio': pkr.inner_results.log_accept_ratio,
-                    'target_log_prob': pkr.inner_results.target_log_prob,
-                    'step_size': pkr.inner_results.step_size,
-                    'is_accepted': pkr.inner_results.is_accepted,
-                    'energy': pkr.inner_results.energy,
-                    'has_divergence': pkr.inner_results.has_divergence,
-                    'leapfrogs_taken': pkr.inner_results.leapfrogs_taken,
-                    'reach_max_depth': pkr.inner_results.reach_max_depth,
-                }
+        def traced_fields(_, pkr):
+            # Trace all possible items. Possibilities:
+            # 'count', 'energy', 'grads_target_log_prob', 'has_divergence', 'index', 'is_accepted', 'leapfrogs_taken', 'log_accept_ratio', 'reach_max_depth', 'seed', 'step_size', 'target_log_prob'
+            # count, index, seed, and grads_target_log_prob give errors if traced
+            return {
+                'log_accept_ratio': pkr.inner_results.log_accept_ratio,
+                'target_log_prob': pkr.inner_results.target_log_prob,
+                'step_size': pkr.inner_results.step_size,
+                'is_accepted': pkr.inner_results.is_accepted,
+                'energy': pkr.inner_results.energy,
+                'has_divergence': pkr.inner_results.has_divergence,
+                'leapfrogs_taken': pkr.inner_results.leapfrogs_taken,
+                'reach_max_depth': pkr.inner_results.reach_max_depth,
+            }
 
     # With reductions means we have to unwrap once more
     def trace_fn(_, pkr):
@@ -261,26 +254,34 @@ else:
             print(f'{key}: {a}, mean: {jnp.mean(a)}, std: {jnp.std(a)}, min: {jnp.min(a)}, max: {jnp.max(a)}\n\n')
         print(f"Samples: {samples}")
 
-    else:
-        log_accept_ratio = pkr['log_accept_ratio']
-        log_probs = pkr['target_log_prob']
-        step_sizes = pkr['step_size']
+    log_accept_ratio = pkr['log_accept_ratio']
+    log_probs = pkr['target_log_prob']
+    step_sizes = pkr['step_size']
+    has_divergences = pkr['has_divergence']
+    is_accepteds = pkr['is_accepted']
+    leapfrogs_takens = pkr['leapfrogs_taken']
+    reach_max_depths = pkr['reach_max_depth']
+    energies = pkr['energy']
 
 # Generate samples and save results if not in DEBUG mode
-if not DEBUG:
-    # Save results: samples and plots
-    np.savetxt(fname=f'{results_dir}/samples_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=samples, delimiter=',')
-    np.savetxt(fname=f'{results_dir}/logacceptratio_{SLURM_ARRAY_TASK_ID}.csv', X=log_accept_ratio, delimiter=',')
-    if mcmc_or_hmc == 'hmc':
-        np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_sizes, delimiter=',')
-        np.savetxt(fname=f'{results_dir}/logprobs_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=log_probs, delimiter=',')
+# Save results: samples and plots
+np.savetxt(fname=f'{results_dir}/samples_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=samples, delimiter=',')
+np.savetxt(fname=f'{results_dir}/logacceptratio_{SLURM_ARRAY_TASK_ID}.csv', X=log_accept_ratio, delimiter=',')
+if mcmc_or_hmc == 'hmc':
+    np.savetxt(fname=f'{results_dir}/stepsizes_{SLURM_ARRAY_TASK_ID}.csv', X=step_sizes, delimiter=',')
+    np.savetxt(fname=f'{results_dir}/logprobs_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=log_probs, delimiter=',')
+    np.savetxt(fname=f'{results_dir}/has_divergences_{SLURM_ARRAY_TASK_ID}.csv', X=has_divergences, delimiter=',')
+    np.savetxt(fname=f'{results_dir}/is_accepteds_{SLURM_ARRAY_TASK_ID}.csv', X=is_accepteds, delimiter=',')
+    np.savetxt(fname=f'{results_dir}/leapfrogs_takens_{SLURM_ARRAY_TASK_ID}.csv', X=leapfrogs_takens, delimiter=',')
+    np.savetxt(fname=f'{results_dir}/reach_max_depths_{SLURM_ARRAY_TASK_ID}.csv', X=reach_max_depths, delimiter=',')
+    np.savetxt(fname=f'{results_dir}/energies_{SLURM_ARRAY_TASK_ID}.csv', X=energies, delimiter=',')
 
-    # Get NN predictions on these samples.
-    specified_parameters_transformed = transform_input(np.array(specified_parameters).reshape((1,-1)))
-    xs = utils._form_batch(samples_transformed, specified_parameters_transformed)
-    model = keras.models.load_model(model_path)
-    predictions_transformed = model.predict(xs, verbose=2)
-    predictions = utils.untransform_output(predictions_transformed)
-    np.savetxt(fname=f'{results_dir}/predictions_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=predictions, delimiter=',')
+# Get NN predictions on these samples.
+specified_parameters_transformed = transform_input(np.array(specified_parameters).reshape((1,-1)))
+xs = utils._form_batch(samples_transformed, specified_parameters_transformed)
+model = keras.models.load_model(model_path)
+predictions_transformed = model.predict(xs, verbose=2)
+predictions = utils.untransform_output(predictions_transformed)
+np.savetxt(fname=f'{results_dir}/predictions_{SLURM_ARRAY_TASK_ID}_{df.experiment_name}_{df.interval}_{df.polarity}.csv', X=predictions, delimiter=',')
 
 

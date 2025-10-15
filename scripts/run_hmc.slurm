@@ -13,7 +13,7 @@
 
 #SBATCH --job-name=hmc_debug ## Job name
 #SBATCH --output=job.out
-#SBATCH --output=logs/hmc-debug-10-06-%A.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
+#SBATCH --output=logs/hmc-debug-10-15-%A.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
 #SBATCH --mail-type=START,END,FAIL
 #SBATCH --mail-user=linneamw@hawaii.edu
 ##SBATCH --begin=now+3hour ## x hours from now

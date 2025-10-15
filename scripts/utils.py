@@ -21,12 +21,11 @@ import jax.numpy as jnp
 
 import keras_core as keras
 
-# TODO: this is not yet updated to use the rtdl_num_embeddings_keras version
 sys.path.append('./nn_train_size_analysis/')
-from rtdl_num_embeddings_tf import (
-    LinearEmbeddings,
-    LinearReLUEmbeddings,
+from rtdl_num_embeddings_keras import (
     PeriodicEmbeddings,
+    PiecewiseLinearEncoding,
+    PiecewiseLinearEmbeddings,
 )
 
 def index_mcmc_runs(file_version):
