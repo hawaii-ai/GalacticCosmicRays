@@ -129,16 +129,16 @@ if DEBUG:
 
 else:
     mcmc_or_hmc = 'hmc' # 'mcmc' or 'hmc'
-    num_results = 100_000 #110_000 for hmc, 400_000 for mcmc
-    num_steps_between_results = 10 # Thinning
-    num_burnin_steps = 1_000 # Number of steps before beginning sampling
+    num_results = 10_000 #110_000 for hmc, 400_000 for mcmc
+    num_steps_between_results = 1 # Thinning
+    num_burnin_steps = 10_000 # Number of steps before beginning sampling
 
     # Note: this is just for mcmc
     scale = 1e-2
 
     # Note: below parameters are only for hmc
     num_adaptation_steps = np.floor(.8*num_burnin_steps) #Somewhat smaller than number of burnin
-    step_size = 1e-4 # 1e-4 is good for hmc
+    step_size = 1e-1 # 1e-4 is good for hmc
     max_tree_depth = 10 # Default=10. Smaller results in shorter steps. Larger takes memory.
     max_energy_diff = 1000 # Default 1000.0. Divergent samples are those that exceed this.
     unrolled_leapfrog_steps = 1 # Default 1. The number of leapfrogs to unroll per tree expansion step
@@ -200,7 +200,35 @@ def run_chain(key, state):
     def trace_fn(_, pkr):
         pkr = pkr.inner_results
         return traced_fields(_, pkr)
+
+    # Generate 10 samples, quote time cost
+    start_time = time.time()
+
+    timer_base_kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(
+        inner_kernel,
+        num_adaptation_steps=0,
+        step_size_setter_fn=lambda pkr, new_step_size: pkr._replace(step_size=new_step_size),
+        step_size_getter_fn=lambda pkr: pkr.step_size,
+        log_accept_prob_getter_fn=lambda pkr: pkr.log_accept_ratio,
+        target_accept_prob=target_accept_prob
+    )
+    timer_progress = xmcmc.ProgressBarReducer(num_results=10)  # prints one line that updates 
+    timer_kernel = xmcmc.WithReductions(timer_base_kernel, timer_progress)
     
+    timer_samples, timer_pkr = tfp.mcmc.sample_chain(
+        num_results=10,
+        num_burnin_steps=0,
+        num_steps_between_results=0,
+        kernel=timer_kernel,
+        trace_fn=trace_fn,
+        current_state=state,
+        seed=key
+    )
+    timer_run_time = time.time() - start_time
+    print(f'Generated 10 samples in {timer_run_time:.2f} seconds.')
+    print(f'Estimated time to generate {num_results} samples: {((timer_run_time / 10) * ((num_results * (num_steps_between_results + 1)) + num_burnin_steps)) / (60 * 60):.2f} hours.')
+    del timer_samples, timer_pkr, timer_base_kernel, timer_progress, timer_kernel
+
     # add progress bar to the kernel
     progress = xmcmc.ProgressBarReducer(num_results=num_results)  # prints one line that updates 
     kernel = xmcmc.WithReductions(base_kernel, progress)
@@ -213,6 +241,7 @@ def run_chain(key, state):
         kernel=kernel,
         trace_fn=trace_fn,
         current_state=state,
+        parallel_iterations=2,  # Speeds things up but uses more memory
         seed=key
         )
     

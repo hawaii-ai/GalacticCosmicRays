@@ -16,7 +16,7 @@ Author: ChatGPT (Keras Core)
 from __future__ import annotations
 from collections.abc import Mapping
 from typing import Optional, Sequence, Tuple, List
-import math
+import numbers
 import numpy as np
 import keras_core as keras
 from keras_core import ops
@@ -38,8 +38,6 @@ def _safe_minmax(x, axis=0):
     x_max = ops.max(x, axis=axis)
     return x_min, x_max
 
-import numbers
-
 def _is_mapping(x) -> bool:
     return isinstance(x, Mapping) or hasattr(x, "keys")
 
@@ -54,11 +52,10 @@ def _keys_in_order(x, feature_order: Optional[List[str]]):
 def _unwrap_numpy_like(x):
     """Unwrap common Keras/NumPy JSON wrappers back to raw array-like."""
     if _is_mapping(x):
-        # Common keys seen in serialized configs
         for k in ("__numpy__", "__ndarray__", "__array__", "value", "values", "data"):
             if k in x:
                 return x[k]
-        # Dict that looks like {'0': ..., '1': ...}
+        # dicts like {'0': ..., '1': ...}
         try:
             numeric_keys = [k for k in x.keys() if str(k).isdigit()]
             if numeric_keys:
@@ -66,17 +63,21 @@ def _unwrap_numpy_like(x):
                 return [x[k] for k in numeric_keys]
         except Exception:
             pass
-        # Single-item mapping: return its sole value
         if len(x) == 1:
             return next(iter(x.values()))
     return x
 
 def _only_numeric_flat(x):
-    """Recursively flatten and keep only ints/floats (drop strings like '__numpy__')."""
+    """Recursively flatten and keep only numeric scalars."""
     out = []
     if isinstance(x, (list, tuple)):
         for v in x:
             out.extend(_only_numeric_flat(v))
+    elif isinstance(x, np.ndarray):
+        # Keep numeric entries only
+        for v in x.ravel().tolist():
+            if isinstance(v, numbers.Number):
+                out.append(float(v))
     elif _is_mapping(x):
         for v in x.values():
             out.extend(_only_numeric_flat(v))
@@ -85,27 +86,35 @@ def _only_numeric_flat(x):
     return out
 
 def _to_plain_list(x, feature_order: Optional[List[str]] = None):
-    """Convert list/ndarray/tensor or dict-like -> plain Python list in a stable order."""
+    """
+    Convert to a plain Python list.
+    - For dict-like: unwrap & flatten numerics in a stable key order.
+    - For non-mapping (arrays/lists/ndarrays/tensors): direct tolist().
+    """
     x = _unwrap_numpy_like(x)
     if _is_mapping(x):
         keys = _keys_in_order(x, feature_order)
         vals = [_unwrap_numpy_like(x[k]) for k in keys]
         flat = _only_numeric_flat(vals)
         return flat
-    # array-like or nested mixture
-    flat = _only_numeric_flat(x)
-    return flat
+    # Non-mapping: don’t over-flatten; just tolist.
+    return np.asarray(x).tolist()
 
 def _to_1d_tensor(x, n_features: int, dtype, feature_order: Optional[List[str]] = None):
-    """Convert list/ndarray/tensor or dict-like -> (n_features,) tensor, robust to wrappers."""
+    """
+    Produce a (n_features,) tensor.
+    - For dict-like: unwrap + numeric-flatten to guarantee 1-D numeric list.
+    - For non-mapping: convert directly to tensor (works for numpy arrays).
+    """
     x = _unwrap_numpy_like(x)
     if _is_mapping(x):
         keys = _keys_in_order(x, feature_order)
         vals = [_unwrap_numpy_like(x[k]) for k in keys]
+        vals = _only_numeric_flat(vals)
+        t = ops.convert_to_tensor(vals, dtype=dtype)
     else:
-        vals = x
-    vals = _only_numeric_flat(vals)
-    t = ops.convert_to_tensor(vals, dtype=dtype)
+        # Plain array path (np.ndarray, list, tensor): no lossy flatten
+        t = ops.convert_to_tensor(x, dtype=dtype)
     t = ops.reshape(t, (n_features,))
     return t
 
@@ -117,7 +126,6 @@ def _normalize_value_range(value_range, feature_order: Optional[List[str]]):
     mins_l = _to_plain_list(mins, feature_order)
     maxs_l = _to_plain_list(maxs, feature_order)
     return (mins_l, maxs_l)
-
 
 
 # ---------------------------------------------------------------------------

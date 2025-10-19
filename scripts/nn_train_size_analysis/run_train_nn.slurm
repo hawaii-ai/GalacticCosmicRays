@@ -1,16 +1,16 @@
 #!/bin/bash
 # See https://slurm.schedmd.com/job_array.html
 
-#SBATCH --partition=sadow # sadow, gpu, kill-shared, shared
-#SBATCH --account=sadow
+#SBATCH --partition=kill-shared,gpu # sadow, gpu, kill-shared, shared
+##SBATCH --account=sadow
 
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=36gb ## max amount of memory per node you require
+#SBATCH --mem=18gb ## max amount of memory per node you require
 #SBATCH --time=03-00:00:00 ## time format is DD-HH:MM:SS, 3day max on kill-shared, 7day max on sadow
 
-#SBATCH --job-name=nn_besthp
-#SBATCH --output=./logs/optuna-october14-%A.out
+#SBATCH --job-name=nn
+#SBATCH --output=./logs/trial5-full-%A.out
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=linneamw@hawaii.edu
 
