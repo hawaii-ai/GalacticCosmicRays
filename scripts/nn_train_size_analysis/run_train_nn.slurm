@@ -1,7 +1,7 @@
 #!/bin/bash
 # See https://slurm.schedmd.com/job_array.html
 
-#SBATCH --partition=kill-shared,gpu # sadow, gpu, kill-shared, shared
+#SBATCH --partition=gpu # sadow, gpu, kill-shared, shared
 ##SBATCH --account=sadow
 
 #SBATCH --gres=gpu:1

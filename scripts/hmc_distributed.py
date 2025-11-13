@@ -58,6 +58,7 @@ def str2bool(v):
     else:
         raise UserWarning(f'Boolean value expected for parameter {v}.')
 
+# TODO: Update to work with test data files. Will just need to create a df object with the right info, and update load_data_ams
 
 model_version = os.getenv('MODEL_VERSION', default='v3.0')
 data_version = os.getenv('DATA_VERSION', default='d1')
@@ -70,11 +71,7 @@ train_size_env = os.getenv('TRAIN_SIZE', default=None)
 train_size = float(train_size_env) if train_size_env is not None else None
 bootstrap = os.getenv('BOOTSTRAP', default='b0')
 model_save_dir = os.getenv('MODEL_SAVE_DIR', default=None)
-
-# Select experiment parameters
-df = utils.index_mcmc_runs(file_version=file_version)  # List of all experiments (0-209) for '2023', 0-14 for '2024'
-print(f'Found {df.shape[0]} combinations to run MCMC on. Performing MCMC on index {SLURM_ARRAY_TASK_ID}.')
-df = df.iloc[SLURM_ARRAY_TASK_ID]
+mcmc_or_hmc = os.getenv('MCMC_OR_HMC', default='hmc')
 
 # Setup  output directory.
 results_dir = f'../../results/{hmc_version}/'
@@ -83,12 +80,42 @@ print(f'Running HMC version {hmc_version} on model version {model_version} and t
 
 # Load observation data and define logprob. 
 if file_version == '2023': 
+    # Select experiment parameters
+    df = utils.index_mcmc_runs(file_version=file_version)  # List of all experiments (0-209) for '2023', 0-14 for '2024'
+    print(f'Found {df.shape[0]} combinations to run MCMC on. Performing MCMC on index {SLURM_ARRAY_TASK_ID}.')
+    df = df.iloc[SLURM_ARRAY_TASK_ID]
+
     data_path = f'../data/oct2022/{df.experiment_name}/{df.experiment_name}_{df.interval}.dat'  # This data is the same.
+    specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval, constant_vspoles=constant_vspoles)
+
 elif file_version == '2024': 
+    # Select experiment parameters
+    df = utils.index_mcmc_runs(file_version=file_version)  # List of all experiments (0-209) for '2023', 0-14 for '2024'
+    print(f'Found {df.shape[0]} combinations to run MCMC on. Performing MCMC on index {SLURM_ARRAY_TASK_ID}.')
+    df = df.iloc[SLURM_ARRAY_TASK_ID]
+
     year = 2000 + SLURM_ARRAY_TASK_ID # assumes only negative intervals. If otherwise, fix this
     data_path = f'../data/2024/yearly/{year}.dat'
+    specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval, constant_vspoles=constant_vspoles)
+
+elif file_version == 'test_data':
+    # Initialize exp_name, interval, and polarity for test data
+    df = pd.DataFrame({
+        'experiment_name': ['test_neg'],
+        'interval': ['test_neg'],
+        'polarity': ['neg']
+    })
+    df = df.iloc[0]
+
+    # Load correct data path and specified parameters for test data
+    data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+    print(f'Using test data for MCMC run; file {data_path}.')
+
+    spec_params_file = '/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/test_neg_specparams.csv'
+    specified_parameters = pd.read_csv(spec_params_file).values[SLURM_ARRAY_TASK_ID]
+
 else:
-    raise ValueError(f"Invalid file_version {file_version}. Must be '2023' or '2024'.")
+    raise ValueError(f"Invalid file_version {file_version}. Must be '2023', '2024', or 'test_data'.")
 
 # Load NN model
 if train_size is not None:
@@ -101,7 +128,6 @@ else:
 # Define parameters for HMC
 seed = SLURM_ARRAY_TASK_ID + SLURM_ARRAY_JOB_ID
 penalty = 1e6
-specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval, constant_vspoles=constant_vspoles)
 
 # Number of parameters for HMC to sample. 5 normally, 3 if par_equals_perr=True
 if par_equals_perr:
@@ -114,7 +140,6 @@ target_log_prob = utils.define_log_prob(model_path, data_path, specified_paramet
 # Hyperparameters for MCMC
 if DEBUG:
     # For running interactive tests.
-    mcmc_or_hmc = 'hmc' # 'mcmc' or 'hmc'
     num_results = 500 
     num_steps_between_results = 0 # Thinning
     num_burnin_steps = 100 # Number of steps before beginning sampling
@@ -128,8 +153,11 @@ if DEBUG:
     scale = 1e-2 # for mcmc
 
 else:
-    mcmc_or_hmc = 'hmc' # 'mcmc' or 'hmc'
-    num_results = 10_000 #110_000 for hmc, 400_000 for mcmc
+    if mcmc_or_hmc == 'mcmc':
+        num_results = 400_000 #110_000 for hmc, 400_000 for mcmc
+    else:
+        num_results = 110_000 #110_000 for hmc, 400_000 for mcmc
+
     num_steps_between_results = 1 # Thinning
     num_burnin_steps = 10_000 # Number of steps before beginning sampling
 
@@ -156,9 +184,14 @@ def run_chain(key, state):
             new_state_fn=tfp.mcmc.random_walk_normal_fn(scale=scale),
         )
 
+        timer_base_kernel = tfp.mcmc.RandomWalkMetropolis(
+            target_log_prob_fn=target_log_prob,
+            new_state_fn=tfp.mcmc.random_walk_normal_fn(scale=scale),
+        )
+
         def traced_fields(_, pkr):
             return {
-                'log_accept_ratio': pkr.inner_results.log_accept_ratio,
+                'log_accept_ratio': pkr.log_accept_ratio,
             }
         
     else:
@@ -175,6 +208,15 @@ def run_chain(key, state):
         base_kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(
             inner_kernel,
             num_adaptation_steps=num_adaptation_steps,
+            step_size_setter_fn=lambda pkr, new_step_size: pkr._replace(step_size=new_step_size),
+            step_size_getter_fn=lambda pkr: pkr.step_size,
+            log_accept_prob_getter_fn=lambda pkr: pkr.log_accept_ratio,
+            target_accept_prob=target_accept_prob
+        )
+
+        timer_base_kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(
+            inner_kernel,
+            num_adaptation_steps=0,
             step_size_setter_fn=lambda pkr, new_step_size: pkr._replace(step_size=new_step_size),
             step_size_getter_fn=lambda pkr: pkr.step_size,
             log_accept_prob_getter_fn=lambda pkr: pkr.log_accept_ratio,
@@ -204,14 +246,6 @@ def run_chain(key, state):
     # Generate 10 samples, quote time cost
     start_time = time.time()
 
-    timer_base_kernel = tfp.mcmc.DualAveragingStepSizeAdaptation(
-        inner_kernel,
-        num_adaptation_steps=0,
-        step_size_setter_fn=lambda pkr, new_step_size: pkr._replace(step_size=new_step_size),
-        step_size_getter_fn=lambda pkr: pkr.step_size,
-        log_accept_prob_getter_fn=lambda pkr: pkr.log_accept_ratio,
-        target_accept_prob=target_accept_prob
-    )
     timer_progress = xmcmc.ProgressBarReducer(num_results=10)  # prints one line that updates 
     timer_kernel = xmcmc.WithReductions(timer_base_kernel, timer_progress)
     

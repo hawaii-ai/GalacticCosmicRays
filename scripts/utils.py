@@ -155,7 +155,13 @@ def load_data_ams(filename, integrate=False):
         integrate = If True, integrate over bin regions, so return r1, r2
                 Otherwise, interpolate flux at the geoemtric mean of the bin and return bin_midpoints
     """
-    dataset_ams = np.loadtxt(filename, usecols=(0,1,2,3)) # Rigidity1, Rigidity2, Flux, Error, dataset (only if yearly dataset)
+    if 'test' in filename:
+        dataset_ams = np.loadtxt(filename, usecols=(0,1,2)) # Rigidity1, Rigidity2, Flux, 0 error
+        uncertainty = np.zeros_like(dataset_ams[:,2]) + 1e-1 # Dummy uncertainty
+    else:
+        dataset_ams = np.loadtxt(filename, usecols=(0,1,2,3)) # Rigidity1, Rigidity2, Flux, Error, dataset (only if yearly dataset)
+        uncertainty = dataset_ams[:,3]
+
     r1, r2 = dataset_ams[:,0], dataset_ams[:,1]
 
     if 'yearly' in filename:
@@ -166,7 +172,6 @@ def load_data_ams(filename, integrate=False):
 
     bins = np.concatenate([r1[:], r2[-1:]])
     observed = dataset_ams[:,2]   # Observed Flux
-    uncertainty = dataset_ams[:,3]
     assert len(bins) == len(observed)+1
 
     # bin_midpoints = (r1 + r2)/2  # Arithmetic mean
