@@ -3,9 +3,9 @@
 # See https://uhawaii.atlassian.net/wiki/spaces/HPC/pages/430407770/The+Basics+Partition+Information+on+Koa for KOA partition info
 
 # For other data versions, we have 133 negative intervals (0-132)
-#SBATCH --array=0-10 ##0-132 ## Negative intervals only 0-132 and for new yearly data that's 0-14, for old data negative + positive intervals it's 0-209
-#SBATCH --job-name=hmc ## Job name
-#SBATCH --output=logs/hmc-trial5-100000-%A-%a.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
+#SBATCH --array=0-100 ## Negative intervals only 0-132 and for new yearly data that's 0-14, for old data negative + positive intervals it's 0-209
+#SBATCH --job-name=test ## Job name
+#SBATCH --output=logs/hmc-trial5-test-100000-%A-%a.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
 
 #SBATCH --partition=kill-shared,shared ## koa, sadow, gpu, shared, kill-shared, exclusive-long
 ##SBATCH --account=sadow

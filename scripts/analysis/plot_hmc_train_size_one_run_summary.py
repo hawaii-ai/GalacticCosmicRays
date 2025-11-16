@@ -9,8 +9,10 @@ from scipy.stats import wasserstein_distance
 """
 Define parameters
 """
+plt.rcParams.update({'font.size': 13}) 
 
 PARAMETERS = ['cpa', 'pwr1par', 'pwr2par', 'pwr1perr', 'pwr2perr'] 
+PARAMETERS_NAME = [r'$k^{0}_{\parallel}$', r'$a_{\parallel}$', r'$a_{\perp}$', r'$b_{\parallel}$', r'$b_{\perp}$']
 PARAMETERS_MIN = np.array([100., 0.4, 0.4, 0.4, 0.4]) 
 PARAMETERS_MAX = np.array([870., 1.7, 1.7, 2.3, 2.3]) 
 
@@ -21,9 +23,9 @@ bootstrap=['b0', 'b1'] # 'b0' or 'b1', false or true
 which_changes = ["bootstrapped_data", "model_init", "hmc_init"] 
 train_fractions = [0.0001, 0.001, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 df_idxs = range(11) #range(133)
-hmc_version='v34_trial5_full_100000_test'
+hmc_version='v34_trial5_full_100000'
 num_bins = 30
-file_version = 'test_data'
+file_version = '2023' # 'test_data' or '2023'
 
 """
 Define necessary functions
@@ -409,7 +411,7 @@ for idx in df_idxs:
     plots_dir = Path(f'../../../results/{hmc_version}/plots/change_idx/')
     plots_dir.mkdir(parents=True, exist_ok=True)
 
-    plt.figure(figsize=(20, 4))
+    plt.figure(figsize=(20, 5))
     plt.suptitle(r"Gelman-Rubin $\hat{R}$ Statistic for Interval " + f"{exp_name} {interval}")
     data_train_fractions = np.array(existing_train_fractions_data) * 1_788_892 # Scale to the number of data points in the full dataset
     model_train_fractions = np.array(existing_train_fractions_model) * 1_788_892
@@ -422,12 +424,14 @@ for idx in df_idxs:
         plt.plot(model_train_fractions, model_init_rhats[param], marker='o', alpha=0.5, label='Model')
         plt.plot(data_train_fractions, bootstrapped_data_rhats[param], marker='o', alpha=0.5, label='Data')
         plt.hlines(y=1.1, xmin=0.0001 * 1_788_892, xmax=1.0 * 1_788_892, color='r', linestyle='--', label=r'$\hat{R}$=1.1')
-        plt.title(param)
+        plt.title(PARAMETERS_NAME[i])
         plt.xlabel('Train Size')
-        plt.ylabel(r'$\hat{R}$ Statistic')
-        plt.ylim(0.99, 1.2)
-        plt.yscale('log')
+        plt.ylim(0.99, 1.13)
+        # plt.yscale('log')
         plt.legend()
+
+        if i == 0:
+            plt.ylabel(r'$\hat{R}$ Statistic')
 
     plt.tight_layout()
     plt.savefig(plots_dir / f'{idx}_rhat_statistic.png', dpi=300)
@@ -562,7 +566,7 @@ for train_size_fraction in train_fractions:
     plots_dir = Path(f'../../../results/{hmc_version}/plots/change_train_size/')
     plots_dir.mkdir(parents=True, exist_ok=True)
 
-    plt.figure(figsize=(20, 4))
+    plt.figure(figsize=(20, 5))
     plt.suptitle(r"Gelman-Rubin $\hat{R}$ Statistic for " + f"Train Size {int(train_size_fraction * 1_788_892)}")
 
     # Plot the R-hat statistics
@@ -572,12 +576,15 @@ for train_size_fraction in train_fractions:
         plt.scatter(existing_df_idxs_model, model_init_rhats[param], marker='o', alpha=0.5, label='Model')
         plt.scatter(existing_df_idxs_data, bootstrapped_data_rhats[param], marker='o', alpha=0.5, label='Data')
         plt.hlines(y=1.1, xmin=0, xmax=132, color='r', linestyle='--', label=r'$\hat{R}$=1.1')
-        plt.title(param)
-        plt.ylim(0.99, 1.2)
-        plt.yscale('log')
+        plt.title(PARAMETERS_NAME[i])
+        plt.ylim(0.99, 1.13)
+        # plt.yscale('log')
         plt.xlabel('Interval Index')
-        plt.ylabel(r'$\hat{R}$ Statistic')
         plt.legend()
+
+        if i == 0:
+            plt.ylabel(r'$\hat{R}$ Statistic')
+
     plt.tight_layout()
     plt.savefig(plots_dir / f'{train_size_fraction}_rhat_statistic.png', dpi=300)
     plt.savefig(plots_dir / f'{train_size_fraction}_rhat_statistic.pdf', dpi=300)

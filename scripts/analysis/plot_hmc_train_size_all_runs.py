@@ -6,7 +6,11 @@ from pathlib import Path
 from scipy.special import rel_entr, kl_div
 from scipy.stats import wasserstein_distance
 
-PARAMETERS = ['cpa', 'pwr1par', 'pwr2par', 'pwr1perr', 'pwr2perr'] 
+
+plt.rcParams.update({'font.size': 13}) 
+
+PARAMETERS = ['cpa', 'pwr1par', 'pwr2par', 'pwr1perr', 'pwr2perr']
+PARAMETERS_NAME = [r'$k^{0}_{\parallel}$', r'$a_{\parallel}$', r'$a_{\perp}$', r'$b_{\parallel}$', r'$b_{\perp}$'] 
 PARAMETERS_MIN = np.array([100., 0.4, 0.4, 0.4, 0.4]) 
 PARAMETERS_MAX = np.array([870., 1.7, 1.7, 2.3, 2.3]) 
 
@@ -21,7 +25,7 @@ bootstrap=['b0', 'b1'] # 'b0' or 'b1', false or true
 which_changes = ["hmc_init", "model_init", "bootstrapped_data"] 
 which_changes_short = ["HMC", "Model", "Data"]
 hmc_version='v34_trial5_full_100000'
-file_version='2023'
+file_version='2023' # test_data, 2023, or 2024
 df_idxs=range(133)
 missing_files = []
 
@@ -471,7 +475,7 @@ print(max_distances)
 data_train_fractions = np.array(train_fractions) * 1_788_892 # Scale to the number of data points in the full dataset
 
 # Let's make a 1 x 5 grid of subplots, where each plot is the distance for each parameter over all the train sizes
-plt.figure(figsize=(20, 4))
+plt.figure(figsize=(20, 5))
 plt.suptitle(r"Average Gelman-Rubin $\hat{R}$ Statistic Across All Intervals", fontsize=14)
 
 # Plot the KL divergences
@@ -480,12 +484,14 @@ for i, param in enumerate(PARAMETERS):
     for j, which_change in enumerate(which_changes):
         plt.plot(data_train_fractions, avg_distances[f'{param}_{which_change}'], marker='o', alpha=0.5, label=f'{which_changes_short[j]}')
     plt.hlines(y=1.1, xmin=data_train_fractions[0], xmax=data_train_fractions[-1], color='r', linestyle='--', label=r'$\hat{R}$=1.1')
-    plt.ylim(0.99, 1.2)
-    plt.title(param)
+    plt.ylim(0.99, 1.13)
+    plt.title(PARAMETERS_NAME[i])
     plt.xlabel('Train Size')
-    plt.ylabel(r'Gelman-Rubin $\hat{R}$ Statistic')
-    plt.yscale('log')
+    # plt.yscale('log')
     plt.legend()
+
+    if i == 0:
+        plt.ylabel(r'$\hat{R}$ Statistic')
 
 plt.tight_layout()
 plt.savefig(f'../../../results/{hmc_version}/plots/all_changes_all_train_sizes_all_intervals_rhat_statistic.png', dpi=300)
@@ -493,7 +499,7 @@ plt.savefig(f'../../../results/{hmc_version}/plots/all_changes_all_train_sizes_a
 plt.show()
 
 # Let's make a 1 x 5 grid of subplots, where each plot is the distance for each parameter over all the train sizes
-plt.figure(figsize=(20, 4))
+plt.figure(figsize=(20, 5))
 plt.suptitle(r"Average Gelman-Rubin $\hat{R}$ Statistic Across All Intervals", fontsize=14)
 
 # Plot the KL divergences
@@ -503,14 +509,16 @@ for i, param in enumerate(PARAMETERS):
         plt.vlines(data_train_fractions, min_distances[f'{param}_{which_change}'], max_distances[f'{param}_{which_change}'], color=f'C{j}', alpha=0.5)
         plt.plot(data_train_fractions, avg_distances[f'{param}_{which_change}'], marker='o', alpha=0.5, label=f'{which_changes_short[j]}')
     plt.hlines(y=1.1, xmin=data_train_fractions[0], xmax=data_train_fractions[-1], color='r', linestyle='--', label=r'$\hat{R}$=1.1')
-    plt.ylim(0.99, 1.2)
-    plt.title(param)
+    plt.ylim(0.99, 1.13)
+    plt.title(PARAMETERS_NAME[i])
     plt.xlabel('Train Size')
-    plt.ylabel(r'Gelman-Rubin $\hat{R}$ Statistic')
-    plt.yscale('log')
+    # plt.yscale('log')
     plt.legend()
+
+    if i == 0:
+        plt.ylabel(r'$\hat{R}$ Statistic')
 
 plt.tight_layout()
 plt.savefig(f'../../../results/{hmc_version}/plots/all_changes_all_train_sizes_all_intervals_rhat_statistic_errorbars.png', dpi=300)
-plt.savefig(f'../../../results/{hmc_version}/plots/all_changes_all_train_sizes_all_intervals_rhat_statistic_errorbars.pdf', dpi=300)
-plt.show()
+plt.savefig(f'../../../results/{hmc_version}/plots/all_changes_all_train_sizes_all_intervals_rhat_statistic_errorbars.pdf')
+plt.close()

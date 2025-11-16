@@ -6,11 +6,15 @@ from pathlib import Path
 from scipy.special import rel_entr, kl_div
 from scipy.stats import wasserstein_distance
 
+
+plt.rcParams.update({'font.size': 13}) 
+
 """
 Define parameters
 """
 
 PARAMETERS = ['cpa', 'pwr1par', 'pwr2par', 'pwr1perr', 'pwr2perr'] 
+PARAMETERS_NAME = [r'$k^{0}_{\parallel}$', r'$a_{\parallel}$', r'$a_{\perp}$', r'$b_{\parallel}$', r'$b_{\perp}$'] 
 PARAMETERS_MIN = np.array([100., 0.4, 0.4, 0.4, 0.4]) 
 PARAMETERS_MAX = np.array([870., 1.7, 1.7, 2.3, 2.3]) 
 
@@ -22,9 +26,9 @@ which_changes = ["bootstrapped_data", "model_init", "hmc_init"]
 which_changes_short = ["Data", "Model", "HMC"]
 train_fractions = [0.0001, 0.001, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 df_idxs = range(11) #range(133)
-hmc_version='v34_trial5_full_100000_test'
+hmc_version='v34_trial5_full_100000'
 num_bins = 30
-file_version='test_data'
+file_version='2023' # test_data or 2023
 
 """
 Define necessary functions
@@ -380,7 +384,7 @@ for i, which_change in enumerate(which_changes):
                 continue
 
             # For each parameter, plot the trace and the autocorrelation function for each HMC run
-            for param in PARAMETERS:
+            for j, param in enumerate(PARAMETERS):
                 fig, axs = plt.subplots(2, 5, figsize=(20, 4))
                 axs[0][0].plot(hmc_0_samples[param], label=f'{data_bootstrap_model_hmc_identifier_0}', alpha=0.7)
                 axs[0][1].plot(hmc_1_samples[param], label=f'{data_bootstrap_model_hmc_identifier_1}', alpha=0.7)
@@ -388,16 +392,16 @@ for i, which_change in enumerate(which_changes):
                 axs[0][3].plot(hmc_3_samples[param], label=f'{data_bootstrap_model_hmc_identifier_3}', alpha=0.7)
                 axs[0][4].plot(hmc_4_samples[param], label=f'{data_bootstrap_model_hmc_identifier_4}', alpha=0.7)
                 for ax in axs[0]:
-                    ax.set_title(f'Trace plot for {param}')
+                    ax.set_title(f'Trace plot for {PARAMETERS_NAME[j]}')
                     ax.set_xlabel('Sample index')
                     ax.set_ylim(PARAMETERS_MIN[PARAMETERS.index(param)], PARAMETERS_MAX[PARAMETERS.index(param)])
                     ax.legend()
                 
-                plot_acf(hmc_0_samples[param], ax=axs[1][0], lags=50, title=f'Autocorrelation for {param}', label=f'{data_bootstrap_model_hmc_identifier_0}')
-                plot_acf(hmc_1_samples[param], ax=axs[1][1], lags=50, title=f'Autocorrelation for {param}', label=f'{data_bootstrap_model_hmc_identifier_1}')
-                plot_acf(hmc_2_samples[param], ax=axs[1][2], lags=50, title=f'Autocorrelation for {param}', label=f'{data_bootstrap_model_hmc_identifier_2}')
-                plot_acf(hmc_3_samples[param], ax=axs[1][3], lags=50, title=f'Autocorrelation for {param}', label=f'{data_bootstrap_model_hmc_identifier_3}')
-                plot_acf(hmc_4_samples[param], ax=axs[1][4], lags=50, title=f'Autocorrelation for {param}', label=f'{data_bootstrap_model_hmc_identifier_4}')
+                plot_acf(hmc_0_samples[param], ax=axs[1][0], lags=50, title=f'Autocorrelation for {PARAMETERS_NAME[j]}', label=f'{data_bootstrap_model_hmc_identifier_0}')
+                plot_acf(hmc_1_samples[param], ax=axs[1][1], lags=50, title=f'Autocorrelation for {PARAMETERS_NAME[j]}', label=f'{data_bootstrap_model_hmc_identifier_1}')
+                plot_acf(hmc_2_samples[param], ax=axs[1][2], lags=50, title=f'Autocorrelation for {PARAMETERS_NAME[j]}', label=f'{data_bootstrap_model_hmc_identifier_2}')
+                plot_acf(hmc_3_samples[param], ax=axs[1][3], lags=50, title=f'Autocorrelation for {PARAMETERS_NAME[j]}', label=f'{data_bootstrap_model_hmc_identifier_3}')
+                plot_acf(hmc_4_samples[param], ax=axs[1][4], lags=50, title=f'Autocorrelation for {PARAMETERS_NAME[j]}', label=f'{data_bootstrap_model_hmc_identifier_4}')
                 for ax in axs[1]:
                     ax.set_xlabel('Lag')
                     ax.set_ylim(-0.1, 1.0)
@@ -409,8 +413,8 @@ for i, which_change in enumerate(which_changes):
                 plt.close()
 
             # Calculate Gelman-Rubin R-hat statistic for each parameter
-            chains_samples = [hmc_0_samples, hmc_1_samples , hmc_2_samples, hmc_3_samples, hmc_4_samples]
-            rhats = compute_rhat(chains_samples, params=PARAMETERS, mode='split', thin=1, return_details=True)
+            chains = [hmc_0_samples, hmc_1_samples , hmc_2_samples, hmc_3_samples, hmc_4_samples]
+            rhats = compute_rhat(chains, params=PARAMETERS, mode='split', thin=1, return_details=True)
             print(rhats)
             print("R-hat statistics:")
             for param, rhat in rhats.items():
@@ -421,48 +425,78 @@ for i, which_change in enumerate(which_changes):
                     print(f"  {param}: {rhat:.4f}")
 
             # Let's make a 1 x 5 grid of subplots, where they are the historograms of the samples. We'll plot both hmc_0 and hmc_1 samples in the same grid
-            fig, axs = plt.subplots(1, 5, figsize=(20, 4))
-            plt.suptitle(r"Gelman-Rubin $\hat{R}$ Statistic for Interval " + f"{exp_name} {interval} and Train Size {int(train_size_fraction * 1_788_892)} Across Changing {which_changes_short[i]}")
-            # Plot the samples
-            distances = []
+            chain_labels = ["1", "2", "3", "4", "5"]
+            colors = plt.cm.Blues(np.linspace(0.4, 1.0, len(chains)))
+            param_hist_max = [1.0, 0.04, 0.25, 0.05, 0.25]
+            scale = True
+
+            fig, axs = plt.subplots(1, 5, figsize=(20, 6), sharey=False)
+            plt.suptitle(
+                r"Gelman-Rubin $\hat{R}$ Statistic for Interval "
+                + f"{exp_name} {interval} and Train Size {int(train_size_fraction * 1_788_892)} "
+                + f"Across Changing {which_changes_short[i]}"
+            )
+
             for j, param in enumerate(PARAMETERS):
-                samples_0 = hmc_0_samples[param].values
-                samples_1 = hmc_1_samples[param].values
-                samples_2 = hmc_2_samples[param].values
-                samples_3 = hmc_3_samples[param].values
-                samples_4 = hmc_4_samples[param].values
+                # Common bins for this parameter (global binning)
+                vmin = PARAMETERS_MIN[j]
+                vmax = PARAMETERS_MAX[j]
+                bins = np.linspace(vmin, vmax, num_bins + 1)
+                bin_centers = 0.5 * (bins[:-1] + bins[1:])
+                
+                ax = axs[j]
+                ax.set_title(f"{PARAMETERS_NAME[j]} " + r"($\hat{R}$=" + f"{rhats[param][0]:.2f})")
 
-                # Plot the samples with same bins
-                # Use global binning after lab meeting conversation 4/9/2025
-                min = PARAMETERS_MIN[j] 
-                max = PARAMETERS_MAX[j]
+                max_hist = 0
+                
+                # Get maximum histogram value across all chains for this parameter
+                for k, (chain, label, color) in list(enumerate(zip(chains, chain_labels, colors))):
+                    samples = chain[param].values
 
-                # Create histograms and plot
-                hist_0, bins = np.histogram(samples_0, bins=num_bins, range=(min, max), density=True)
-                hist_1, bins = np.histogram(samples_1, bins=num_bins, range=(min, max), density=True)
-                hist_2, bins = np.histogram(samples_2, bins=num_bins, range=(min, max), density=True)
-                hist_3, bins = np.histogram(samples_3, bins=num_bins, range=(min, max), density=True)
-                hist_4, bins = np.histogram(samples_4, bins=num_bins, range=(min, max), density=True)
+                    hist, _ = np.histogram(samples, bins=bins, density=True)
 
-                # Normalize the histograms
-                hist_0 /= hist_0.sum()
-                hist_1 /= hist_1.sum()
-                hist_2 /= hist_2.sum()
-                hist_3 /= hist_3.sum()
-                hist_4 /= hist_4.sum()
+                    # Find maximum value of hist for each parameter across all chains
+                    if hist.max() > max_hist:
+                        max_hist = hist.max()
 
-                # Plot the histograms
-                axs[j].bar(bins[:-1], hist_0, width=(bins[1]-bins[0]), alpha=0.4, label=f'0')
-                axs[j].bar(bins[:-1], hist_1, width=(bins[1]-bins[0]), alpha=0.4, label=f'1')
-                axs[j].bar(bins[:-1], hist_2, width=(bins[1]-bins[0]), alpha=0.4, label=f'2')
-                axs[j].bar(bins[:-1], hist_3, width=(bins[1]-bins[0]), alpha=0.4, label=f'3')
-                axs[j].bar(bins[:-1], hist_4, width=(bins[1]-bins[0]), alpha=0.4, label=f'4')
+                # Ridgeline: each chain is one "ridge" offset in y
+                for k, (chain, label, color) in list(enumerate(zip(chains, chain_labels, colors))):
+                    samples = chain[param].values
 
-                # Set the title and labels
-                axs[j].set_title(f"{param} " + r"$\hat{R}$=" + f"{rhats[param][0]:.2f}")
-                axs[j].legend(loc='upper right')
+                    hist, _ = np.histogram(samples, bins=bins, density=True)
 
-            plt.tight_layout()
+                    # Optionally rescale each ridge to similar height for aesthetics
+                    if scale:
+                        if hist.max() > 0:
+                            hist = hist / max_hist
+                    
+                    offset = k  # vertical offset for this chain
+                    
+                    # Filled area
+                    ax.fill_between(
+                        bin_centers,
+                        offset,
+                        hist + offset,
+                        alpha=0.6,
+                        linewidth=0.5,
+                        edgecolor="black",
+                        color=color,
+                    )
+                    # Outline
+                    ax.plot(bin_centers, hist + offset, linewidth=1.0, color="black")
+                
+                ax.set_xlim(vmin, vmax)
+                ax.set_yticks(range(num_chains))
+                ax.set_yticklabels(chain_labels)
+                ax.set_xlabel("Parameter value")
+                if j == 0:
+                    ax.set_ylabel("Chain #")
+                
+                # Clean up spines for a more "joyplot" aesthetic
+                ax.spines["top"].set_visible(False)
+                ax.spines["right"].set_visible(False)
+
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
             plt.savefig(plots_dir / f'sample_histograms_{idx}.png', dpi=300)
             plt.savefig(plots_dir / f'sample_histograms_{idx}.pdf')
             plt.close()

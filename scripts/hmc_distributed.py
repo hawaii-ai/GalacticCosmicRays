@@ -58,8 +58,6 @@ def str2bool(v):
     else:
         raise UserWarning(f'Boolean value expected for parameter {v}.')
 
-# TODO: Update to work with test data files. Will just need to create a df object with the right info, and update load_data_ams
-
 model_version = os.getenv('MODEL_VERSION', default='v3.0')
 data_version = os.getenv('DATA_VERSION', default='d1')
 hmc_version = os.getenv('HMC_VERSION', default='v25.0')
