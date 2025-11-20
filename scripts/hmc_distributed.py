@@ -96,7 +96,8 @@ elif file_version == '2024':
     data_path = f'../data/2024/yearly/{year}.dat'
     specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval, constant_vspoles=constant_vspoles)
 
-elif file_version == 'test_data':
+# Calibration test on recovering known parameters from test dataset
+elif 'test' in file_version:
     # Initialize exp_name, interval, and polarity for test data
     df = pd.DataFrame({
         'experiment_name': ['test_neg'],
@@ -106,9 +107,17 @@ elif file_version == 'test_data':
     df = df.iloc[0]
 
     # Load correct data path and specified parameters for test data
-    data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+    if 'pamela_not_sampled' in file_version:
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_pamela_not_sampled/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+    elif 'ams_sampled' in file_version:
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_ams_sampled/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+    elif 'ams_not_sampled' in file_version:
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_ams_not_sampled/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+    else:
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_pamela_sampled/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+        print("Defaulting to pamela sampled.")
+    
     print(f'Using test data for MCMC run; file {data_path}.')
-
     spec_params_file = '/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/test_neg_specparams.csv'
     specified_parameters = pd.read_csv(spec_params_file).values[SLURM_ARRAY_TASK_ID]
 
@@ -154,7 +163,7 @@ else:
     if mcmc_or_hmc == 'mcmc':
         num_results = 400_000 #110_000 for hmc, 400_000 for mcmc
     else:
-        num_results = 110_000 #110_000 for hmc, 400_000 for mcmc
+        num_results = 10_000 #110_000 #110_000 for hmc, 400_000 for mcmc
 
     num_steps_between_results = 1 # Thinning
     num_burnin_steps = 10_000 # Number of steps before beginning sampling

@@ -300,8 +300,8 @@ def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9, in
 
     Args:
         model_path: filename of NN model
-        data_path: filename of experimental data for interval, e.g. path/AMS02_H-PRL2018_20110520-20110610.dat
-        parameters_specified: tuple of alpha, cmf, vspoles (parameters not sampled by hmc)
+        data_path: filename of experimental data for interval, e.g. path/AMS02_H-PRL2018_20110520-20110610.dat. Observations are not transformed.
+        parameters_specified: tuple of alpha, cmf, vspoles (parameters not sampled by hmc). These should not be transformed.
         penalty = scalar to punish drifting outside zone of interest. 
         integrate: If True, integrate over bin regions. Otherwise, interpolate flux at the geoemtric mean of the bin.
         par_equals_perr: If True, then perr = par, and the MCMC only samples 3 parameters.
