@@ -107,22 +107,22 @@ elif 'test' in file_version:
     df = df.iloc[0]
 
     # Load correct data path and specified parameters for test data
-    if 'pamela_not_sampled' in file_version:
-        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_pamela_not_sampled/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
-    elif 'ams_sampled' in file_version:
-        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_ams_sampled/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
-    elif 'ams_not_sampled' in file_version:
-        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_ams_not_sampled/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+    if 'pamela_sampled_False' in file_version:
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_pamela_sampled_False/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+    elif 'pamela_sampled_True' in file_version:
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_pamela_sampled_True/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+    elif 'ams_sampled_False' in file_version:
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_ams_sampled_False/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
     else:
-        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_pamela_sampled/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
-        print("Defaulting to pamela sampled.")
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_ams_sampled_True/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+        print("Defaulting to ams sampled.")
     
     print(f'Using test data for MCMC run; file {data_path}.')
     spec_params_file = '/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/test_neg_specparams.csv'
     specified_parameters = pd.read_csv(spec_params_file).values[SLURM_ARRAY_TASK_ID]
 
 else:
-    raise ValueError(f"Invalid file_version {file_version}. Must be '2023', '2024', or 'test_data'.")
+    raise ValueError(f"Invalid file_version {file_version}. Must be '2023', '2024', or 'test_...'.")
 
 # Load NN model
 if train_size is not None:
