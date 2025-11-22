@@ -5,8 +5,8 @@
 # For other data versions, we have 133 negative intervals (0-132)
 #SBATCH --array=2,79,87,103,104,128,129,146,170,175 ##,212,235,263,311,312,337,346,358,373,403,423,434,481,484,496,519,526,528,531,549,569,579,613,616,627,645,660,668,699,707,715,739,746,777,810,859,869,917,953,1003,1023,1054,1063,1093,1116,1140,1141,1161,1206,1218,1238,1249,1267,1273,1277,1279,1311,1315,1349,1354,1375,1394,1407,1414,1432,1464,1475,1477,1540,1551,1589,1648,1695,1761,1776,1781,1846,1908,1914,1949,1981,1998,2035,2042,2056,2127,2145,2160,2188,2194
 ## Negative intervals only 0-132 and for new yearly data that's 0-14, for old data negative + positive intervals it's 0-209
-#SBATCH --job-name=ppc ## Job name
-#SBATCH --output=logs/ppc-trial5-test-10000-%A-%a.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
+#SBATCH --job-name=ppc-obs ## Job name
+#SBATCH --output=logs/ppc-obs-trial5-test-10000-%A-%a.out ## Filled with %A=SLURM_JOB_ID, %a=SLURM_ARRAY_TASK_ID
 
 #SBATCH --partition=shared,kill-shared #shared,kill-shared ## koa, sadow, gpu, shared, kill-shared, exclusive-long
 ##SBATCH --account=sadow

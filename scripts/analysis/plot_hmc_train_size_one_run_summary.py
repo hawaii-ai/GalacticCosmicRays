@@ -11,7 +11,7 @@ Define parameters
 """
 plt.rcParams.update({'font.size': 13}) 
 
-PARAMETERS = ['cpa', 'pwr1par', 'pwr2par', 'pwr1perr', 'pwr2perr'] 
+PARAMETERS = ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr'] 
 PARAMETERS_NAME = [r'$k^{0}_{\parallel}$', r'$a_{\parallel}$', r'$a_{\perp}$', r'$b_{\parallel}$', r'$b_{\perp}$']
 PARAMETERS_MIN = np.array([100., 0.4, 0.4, 0.4, 0.4]) 
 PARAMETERS_MAX = np.array([870., 1.7, 1.7, 2.3, 2.3]) 

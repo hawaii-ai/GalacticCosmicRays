@@ -108,13 +108,13 @@ elif 'test' in file_version:
 
     # Load correct data path and specified parameters for test data
     if 'pamela_sampled_False' in file_version:
-        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_pamela_sampled_False/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_similar_obs_pamela_sampled_False/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
     elif 'pamela_sampled_True' in file_version:
-        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_pamela_sampled_True/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_similar_obs_pamela_sampled_True/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
     elif 'ams_sampled_False' in file_version:
-        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_ams_sampled_False/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_similar_obs_ams_sampled_False/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
     else:
-        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_ams_sampled_True/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_similar_obs_ams_sampled_True/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
         print("Defaulting to ams sampled.")
     
     print(f'Using test data for MCMC run; file {data_path}.')

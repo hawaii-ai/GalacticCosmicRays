@@ -8,6 +8,7 @@ import numpy as np
 # train_file = f'{path}/pos/model_collection_1AU_90deg_0deg_fixed_processed.h5'
 
 # Hardcoded model choices.
+
 INPUTS = ['alpha', 'cmf', 'cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr', 'vspoles']
 # These are hardcoded for transforms. Used in both parities.
 X_MIN = np.array([0.,  2.5, 100., 0.4, 0.4, 0.4, 0.4, 400.]) 
@@ -15,7 +16,7 @@ X_MAX = np.array([85., 9.5, 870., 1.7, 1.7, 2.3, 2.3, 700.])
 X_RANGE = np.array([ 85., 7., 770., 1.3000001, 1.3000001, 1.9, 1.9, 300.])
 # X_MIN,X_MAX,X_RANGE = get_minmax_params(get_attributes(infile))
 # These are selected from above and hardcoded.
-PARAMETERS = ['cpa', 'pwr1par', 'pwr2par', 'pwr1perr', 'pwr2perr'] 
+PARAMETERS = ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr']
 PARAMETERS_MIN = np.array([100., 0.4, 0.4, 0.4, 0.4]) 
 PARAMETERS_MAX = np.array([870., 1.7, 1.7, 2.3, 2.3]) 
 # These parameter don't include (alpha, cmf, vspoles) which we specify separately.
