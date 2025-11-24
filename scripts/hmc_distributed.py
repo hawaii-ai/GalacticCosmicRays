@@ -113,9 +113,18 @@ elif 'test' in file_version:
         data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_similar_obs_pamela_sampled_True/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
     elif 'ams_sampled_False' in file_version:
         data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_similar_obs_ams_sampled_False/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
-    else:
+    elif 'ams_sampled_True' in file_version:
         data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_similar_obs_ams_sampled_True/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
-        print("Defaulting to ams sampled.")
+    elif 'most_sim_interval_sampled_False' in file_version:
+        closest_interval_test_indices = [179161, 130328, 190205, 53421, 41746, 52043, 8602, 191346, 52370, 53421, 73805, 167295, 116965, 145929, 123931, 115059, 141770, 135188, 51767, 147827, 63696, 36503, 169887, 128417, 128417, 95960, 122810, 184841, 96603, 9294, 162366, 5539, 109824, 66985, 66985, 140477, 112367, 179979, 123830, 193327, 186238, 186238, 190990, 141937, 90300, 35891, 147480, 44612, 44612, 175494, 129093, 179038, 139125, 4930, 48506, 156258, 131482, 131482, 41536, 29117, 46244, 127836, 22559, 71892, 178128, 128912, 79456, 185577, 102420, 6628, 42110, 166989, 59139, 176236, 79456, 176236, 166989, 31271, 81277, 17931, 42227, 186728, 190276, 147244, 57679, 41032, 65183, 65183, 101639, 156396, 99188, 156396, 99733, 175036, 72869, 140338, 118812, 66358, 106364, 88078, 859, 84087, 70969, 19555, 173854, 95756, 77310, 133033, 154065, 155349, 140747, 49419, 115279, 176323, 158278, 66668, 158758, 14947, 64385, 46441, 125301, 168950, 29480, 106848, 50169, 149697, 48742, 86409, 4539, 57414, 129043, 150467]
+        SLURM_ARRAY_TASK_ID = closest_interval_test_indices[SLURM_ARRAY_TASK_ID]
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_most_sim_interval_sampled_False/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+    elif 'most_sim_interval_sampled_True' in file_version:
+        closest_interval_test_indices = [179161, 130328, 190205, 53421, 41746, 52043, 8602, 191346, 52370, 53421, 73805, 167295, 116965, 145929, 123931, 115059, 141770, 135188, 51767, 147827, 63696, 36503, 169887, 128417, 128417, 95960, 122810, 184841, 96603, 9294, 162366, 5539, 109824, 66985, 66985, 140477, 112367, 179979, 123830, 193327, 186238, 186238, 190990, 141937, 90300, 35891, 147480, 44612, 44612, 175494, 129093, 179038, 139125, 4930, 48506, 156258, 131482, 131482, 41536, 29117, 46244, 127836, 22559, 71892, 178128, 128912, 79456, 185577, 102420, 6628, 42110, 166989, 59139, 176236, 79456, 176236, 166989, 31271, 81277, 17931, 42227, 186728, 190276, 147244, 57679, 41032, 65183, 65183, 101639, 156396, 99188, 156396, 99733, 175036, 72869, 140338, 118812, 66358, 106364, 88078, 859, 84087, 70969, 19555, 173854, 95756, 77310, 133033, 154065, 155349, 140747, 49419, 115279, 176323, 158278, 66668, 158758, 14947, 64385, 46441, 125301, 168950, 29480, 106848, 50169, 149697, 48742, 86409, 4539, 57414, 129043, 150467]
+        SLURM_ARRAY_TASK_ID = closest_interval_test_indices[SLURM_ARRAY_TASK_ID]
+        data_path = f'/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/dat_files_most_sim_interval_sampled_True/test_neg_r1r2flux_sample{SLURM_ARRAY_TASK_ID}.dat'
+    else:
+        raise ValueError(f"Invalid test file_version {file_version}. Must contain one of 'pamela_sampled_False', 'pamela_sampled_True', 'ams_sampled_False', 'ams_sampled_True', 'most_sim_interval_sampled_False', or 'most_sim_interval_sampled_True'.")
     
     print(f'Using test data for MCMC run; file {data_path}.')
     spec_params_file = '/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/test_neg_specparams.csv'

@@ -7,7 +7,7 @@ from scipy.special import rel_entr, kl_div
 from scipy.stats import wasserstein_distance
 
 
-plt.rcParams.update({'font.size': 13}) 
+plt.rcParams.update({'font.size': 14}) 
 
 PARAMETERS = ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr']
 PARAMETERS_NAME = [r'$k^{0}_{\parallel}$', r'$a_{\parallel}$', r'$a_{\perp}$', r'$b_{\parallel}$', r'$b_{\perp}$'] 

@@ -9,7 +9,7 @@ from scipy.stats import wasserstein_distance
 """
 Define parameters
 """
-plt.rcParams.update({'font.size': 13}) 
+plt.rcParams.update({'font.size': 14}) 
 
 PARAMETERS = ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr'] 
 PARAMETERS_NAME = [r'$k^{0}_{\parallel}$', r'$a_{\parallel}$', r'$a_{\perp}$', r'$b_{\parallel}$', r'$b_{\perp}$']
@@ -22,7 +22,7 @@ hmc_run = ['hmc1', 'hmc2', 'hmc3', 'hmc4', 'hmc5']
 bootstrap=['b0', 'b1'] # 'b0' or 'b1', false or true
 which_changes = ["bootstrapped_data", "model_init", "hmc_init"] 
 train_fractions = [0.0001, 0.001, 0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-df_idxs = range(11) #range(133)
+df_idxs = range(133)
 hmc_version='v34_trial5_full_100000'
 num_bins = 30
 file_version = '2023' # 'test_data' or '2023'
