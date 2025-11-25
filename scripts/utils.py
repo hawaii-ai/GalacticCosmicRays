@@ -21,7 +21,7 @@ import jax.numpy as jnp
 
 import keras_core as keras
 
-sys.path.append('./nn_train_size_analysis/')
+sys.path.append('./nn/')
 from rtdl_num_embeddings_keras import (
     PeriodicEmbeddings,
     PiecewiseLinearEncoding,

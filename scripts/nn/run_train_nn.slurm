@@ -31,7 +31,7 @@ echo "  Bootstrap: $BOOTSTRAP"
 echo "  Save directory: $SAVE_DIR"
 
 echo "Now running the training script..."
-python nn_train_size_analysis.py \
+python train_nn.py \
     --polarity "$POLARITY" \
     --data_version "$DATA_VERSION" \
     --model_version "$MODEL_VERSION" \

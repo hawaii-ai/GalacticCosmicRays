@@ -29,7 +29,7 @@ xmcmc = tensorflow_probability.experimental.mcmc
 import keras_core as keras
 
 # Load tabular embedding layers
-sys.path.append('./nn_train_size_analysis/')
+sys.path.append('./nn/')
 from rtdl_num_embeddings_keras import (
     PeriodicEmbeddings,
     PiecewiseLinearEncoding,
@@ -172,7 +172,7 @@ else:
     if mcmc_or_hmc == 'mcmc':
         num_results = 400_000 #110_000 for hmc, 400_000 for mcmc
     else:
-        num_results = 10_000 #110_000 #110_000 for hmc, 400_000 for mcmc
+        num_results = 20_000 #110_000 #110_000 for hmc, 400_000 for mcmc
 
     num_steps_between_results = 1 # Thinning
     num_burnin_steps = 10_000 # Number of steps before beginning sampling
@@ -300,7 +300,23 @@ def run_chain(key, state):
 # Run the chain with a random seed 
 start_time = time.time()
 np.random.seed(seed)
-state = np.random.random((num_params,)) # used for 29091984
+# state = np.random.random((num_params,)) # used for 29091984
+
+# REMOVE AFTER DEBUGGING ------------------------------------
+# Load state from true params
+import h5py
+h5_file = '/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/test.h5'
+
+# Load test data
+with h5py.File(h5_file, 'r') as h5:
+    num_test_samples, num_inputs,  = h5['X_minmax'].shape
+    _, num_flux,  = h5['Y_log_scaled'].shape
+x_test = h5py.File(h5_file, 'r')['X_minmax'][:].reshape(num_test_samples, num_inputs)
+
+x_test = x_test[closest_interval_test_indices[SLURM_ARRAY_TASK_ID], :]
+state = np.array(x_test[2:7]) # untransformed values
+# REMOVE AFTER DEBUGGING ------------------------------------
+
 key = random.PRNGKey(seed)
 samples_transformed_all, pkr_all = run_chain(key, state)
 
