@@ -1,12 +1,12 @@
 #!/bin/bash
 
 # Arguments (update me)
-train_sizes=( 1.0 ) #( 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 ) #( 0.0001 0.001 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 )
-file_version='test_most_sim_interval_sanity_check_sampled_False' # 2023 is what we are using for this paper # 2024 is the yearly data, 2023 is the old data, test_data is NN test dataset
+train_sizes=( 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 ) #( 0.0001 0.001 0.01 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 )
+file_version='test_pamela_sampled_False' # 2023 is what we are using for this paper # 2024 is the yearly data, 2023 is the old data, test_data is NN test dataset
 integrate='false' # If False, Chi2 is interpolated. If True, Chi2 is integrated.
 par_equals_perr='false' # If True, only 3 parameters will be sampled by the HMC and pwr1par==pwr1perr and pwr2par==pwr2perr
 constant_vspoles='false' # If True, vspoles is fixed to 400.0. If False, vspoles is specified in the data file.
-hmc_version_number='v34_trial5_ppc_10000_'$file_version # Remember to update!
+hmc_version_number='v34_trial5_ppc_10000_interpolated_'$file_version # Remember to update!
 model_save_dir='../models/model_size_investigation_optuna_10082025_trial5_full' # Remember to update!
 mcmc_or_hmc='hmc' # 'mcmc' or 'hmc'
 
