@@ -5,7 +5,7 @@ from statsmodels.graphics.tsaplots import plot_acf
 from pathlib import Path
 from scipy.special import rel_entr, kl_div
 from scipy.stats import wasserstein_distance
-
+from datetime import datetime
 
 plt.rcParams.update({'font.size': 14}) 
 
@@ -33,6 +33,23 @@ file_version='2023' # test_data or 2023
 """
 Define necessary functions
 """
+
+def pretty_print_exp_interval(experiment_name, interval):
+    if 'AMS02' in experiment_name:
+        exp_pretty = 'AMS-02'
+    elif 'PAMELA' in experiment_name:
+        exp_pretty = 'PAMELA'
+
+    start_str, end_str = interval.split("-")
+
+    # Parse
+    start_date = datetime.strptime(start_str, "%Y%m%d")
+    end_date   = datetime.strptime(end_str, "%Y%m%d")
+
+    # Format
+    interval_pretty = f"{start_date.strftime('%d %B %Y')} to {end_date.strftime('%d %B %Y')}"
+
+    return exp_pretty, interval_pretty
 
 def index_mcmc_runs(file_version):
     """Make a list of combinations for which we want to run MCMC."""
@@ -430,10 +447,12 @@ for i, which_change in enumerate(which_changes):
             param_hist_max = [1.0, 0.04, 0.25, 0.05, 0.25]
             scale = True
 
+            exp_pretty, interval_pretty = pretty_print_exp_interval(exp_name, interval)
+
             fig, axs = plt.subplots(1, 5, figsize=(20, 6), sharey=False)
             plt.suptitle(
-                r"Gelman-Rubin $\hat{R}$ Statistic for Interval "
-                + f"{exp_name} {interval} and Train Size {int(train_size_fraction * 1_788_892)} "
+                r"Gelman-Rubin $\hat{R}$ Statistic for " 
+                + f"{exp_pretty} Interval {interval_pretty} and Train Size {int(train_size_fraction * 1_788_892)} "
                 + f"Across Changing {which_changes_short[i]}"
             )
 

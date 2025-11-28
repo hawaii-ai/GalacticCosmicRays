@@ -5,6 +5,7 @@ from statsmodels.graphics.tsaplots import plot_acf
 from pathlib import Path
 from scipy.special import rel_entr, kl_div
 from scipy.stats import wasserstein_distance
+from datetime import datetime
 
 """
 Define parameters
@@ -30,6 +31,24 @@ file_version = '2023' # 'test_data' or '2023'
 """
 Define necessary functions
 """
+
+def pretty_print_exp_interval(experiment_name, interval):
+    if 'AMS02' in experiment_name:
+        exp_pretty = 'AMS-02'
+    elif 'PAMELA' in experiment_name:
+        exp_pretty = 'PAMELA'
+
+    start_str, end_str = interval.split("-")
+
+    # Parse
+    start_date = datetime.strptime(start_str, "%Y%m%d")
+    end_date   = datetime.strptime(end_str, "%Y%m%d")
+
+    # Format
+    interval_pretty = f"{start_date.strftime('%d %B %Y')} to {end_date.strftime('%d %B %Y')}"
+
+    return exp_pretty, interval_pretty
+    
 
 def index_mcmc_runs(file_version):
     """Make a list of combinations for which we want to run MCMC."""
@@ -411,8 +430,10 @@ for idx in df_idxs:
     plots_dir = Path(f'../../../results/{hmc_version}/plots/change_idx/')
     plots_dir.mkdir(parents=True, exist_ok=True)
 
+    exp_pretty, interval_pretty = pretty_print_exp_interval(exp_name, interval)
+
     plt.figure(figsize=(20, 5))
-    plt.suptitle(r"Gelman-Rubin $\hat{R}$ Statistic for Interval " + f"{exp_name} {interval}")
+    plt.suptitle(r"Gelman-Rubin $\hat{R}$ Statistic for " + f"{exp_pretty} Interval {interval_pretty}")
     data_train_fractions = np.array(existing_train_fractions_data) * 1_788_892 # Scale to the number of data points in the full dataset
     model_train_fractions = np.array(existing_train_fractions_model) * 1_788_892
     hmc_train_fractions = np.array(existing_train_fractions_hmc) * 1_788_892
@@ -450,156 +471,156 @@ PLOT AN INDIVIDUAL TIME INTERVAL
 One train size and all time intervals
 ---------------------------------------------------------------------------------------
 """
-missing_files = []
-for train_size_fraction in train_fractions:
-    # Get values
-    if file_version == '2023':
-        df = index_mcmc_runs(file_version='2023')
+# missing_files = []
+# for train_size_fraction in train_fractions:
+#     # Get values
+#     if file_version == '2023':
+#         df = index_mcmc_runs(file_version='2023')
 
-    elif file_version == 'test_data':
-        # Initialize exp_name, interval, and polarity for test data
-        df = pd.DataFrame({
-            'experiment_name': ['test_neg'],
-            'interval': ['test_neg'],
-            'polarity': ['neg']
-        })
+#     elif file_version == 'test_data':
+#         # Initialize exp_name, interval, and polarity for test data
+#         df = pd.DataFrame({
+#             'experiment_name': ['test_neg'],
+#             'interval': ['test_neg'],
+#             'polarity': ['neg']
+#         })
 
-    hmc_init_rhats = {}
-    model_init_rhats = {}
-    bootstrapped_data_rhats = {}
+#     hmc_init_rhats = {}
+#     model_init_rhats = {}
+#     bootstrapped_data_rhats = {}
 
-    for param in PARAMETERS:
-        hmc_init_rhats[param] = []
-        model_init_rhats[param] = []
-        bootstrapped_data_rhats[param] = []
+#     for param in PARAMETERS:
+#         hmc_init_rhats[param] = []
+#         model_init_rhats[param] = []
+#         bootstrapped_data_rhats[param] = []
 
-    existing_df_idxs_hmc = []
-    existing_df_idxs_model = []
-    existing_df_idxs_data = []
-    for which_change in which_changes:
-        if which_change == "bootstrapped_data":
-            data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-            data_bootstrap_model_hmc_identifier_1 = f"{data_version[1]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-            data_bootstrap_model_hmc_identifier_2 = f"{data_version[2]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-            data_bootstrap_model_hmc_identifier_3 = f"{data_version[3]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-            data_bootstrap_model_hmc_identifier_4 = f"{data_version[4]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-        elif which_change == "model_init":
-            data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-            data_bootstrap_model_hmc_identifier_1 = f"{data_version[0]}_{bootstrap[1]}_{model_version[1]}_{hmc_run[0]}"
-            data_bootstrap_model_hmc_identifier_2 = f"{data_version[0]}_{bootstrap[1]}_{model_version[2]}_{hmc_run[0]}"
-            data_bootstrap_model_hmc_identifier_3 = f"{data_version[0]}_{bootstrap[1]}_{model_version[3]}_{hmc_run[0]}"
-            data_bootstrap_model_hmc_identifier_4 = f"{data_version[0]}_{bootstrap[1]}_{model_version[4]}_{hmc_run[0]}"
-        elif which_change == "hmc_init":
-            data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-            data_bootstrap_model_hmc_identifier_1 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[1]}"
-            data_bootstrap_model_hmc_identifier_2 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[2]}"
-            data_bootstrap_model_hmc_identifier_3 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[3]}"
-            data_bootstrap_model_hmc_identifier_4 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[4]}"
+#     existing_df_idxs_hmc = []
+#     existing_df_idxs_model = []
+#     existing_df_idxs_data = []
+#     for which_change in which_changes:
+#         if which_change == "bootstrapped_data":
+#             data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#             data_bootstrap_model_hmc_identifier_1 = f"{data_version[1]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#             data_bootstrap_model_hmc_identifier_2 = f"{data_version[2]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#             data_bootstrap_model_hmc_identifier_3 = f"{data_version[3]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#             data_bootstrap_model_hmc_identifier_4 = f"{data_version[4]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#         elif which_change == "model_init":
+#             data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#             data_bootstrap_model_hmc_identifier_1 = f"{data_version[0]}_{bootstrap[1]}_{model_version[1]}_{hmc_run[0]}"
+#             data_bootstrap_model_hmc_identifier_2 = f"{data_version[0]}_{bootstrap[1]}_{model_version[2]}_{hmc_run[0]}"
+#             data_bootstrap_model_hmc_identifier_3 = f"{data_version[0]}_{bootstrap[1]}_{model_version[3]}_{hmc_run[0]}"
+#             data_bootstrap_model_hmc_identifier_4 = f"{data_version[0]}_{bootstrap[1]}_{model_version[4]}_{hmc_run[0]}"
+#         elif which_change == "hmc_init":
+#             data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#             data_bootstrap_model_hmc_identifier_1 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[1]}"
+#             data_bootstrap_model_hmc_identifier_2 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[2]}"
+#             data_bootstrap_model_hmc_identifier_3 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[3]}"
+#             data_bootstrap_model_hmc_identifier_4 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[4]}"
             
-        # Calculate the distance for each parameter and train size
-        for i, idx in enumerate(df_idxs):
-            if file_version == '2023':
-                df_int = df.iloc[idx:idx+1].copy(deep=True)
-                interval = df_int.interval.iloc[0]
-                polarity = df_int.polarity.iloc[0]
-                exp_name = df_int.experiment_name.iloc[0]
+#         # Calculate the distance for each parameter and train size
+#         for i, idx in enumerate(df_idxs):
+#             if file_version == '2023':
+#                 df_int = df.iloc[idx:idx+1].copy(deep=True)
+#                 interval = df_int.interval.iloc[0]
+#                 polarity = df_int.polarity.iloc[0]
+#                 exp_name = df_int.experiment_name.iloc[0]
 
-            elif file_version == 'test_data':  
-                df_int = df.iloc[0]
-                interval = df_int.interval
-                polarity = df_int.polarity
-                exp_name = df_int.experiment_name
+#             elif file_version == 'test_data':  
+#                 df_int = df.iloc[0]
+#                 interval = df_int.interval
+#                 polarity = df_int.polarity
+#                 exp_name = df_int.experiment_name
             
-            # Parameters (change me!)
-            results_dir_hmc_0 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_0}_{train_size_fraction}/"
-            results_dir_hmc_1 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_1}_{train_size_fraction}/"
-            results_dir_hmc_2 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_2}_{train_size_fraction}/"
-            results_dir_hmc_3 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_3}_{train_size_fraction}/"
-            results_dir_hmc_4 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_4}_{train_size_fraction}/"
+#             # Parameters (change me!)
+#             results_dir_hmc_0 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_0}_{train_size_fraction}/"
+#             results_dir_hmc_1 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_1}_{train_size_fraction}/"
+#             results_dir_hmc_2 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_2}_{train_size_fraction}/"
+#             results_dir_hmc_3 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_3}_{train_size_fraction}/"
+#             results_dir_hmc_4 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_4}_{train_size_fraction}/"
 
-            # Load the samples from each hmc run
-            # They are stored like this: f'{results_dir_hmc}.0/samples_{idx}_{df.experiment_name}_{df.interval}_{df.polarity}.csv'
-            # csv file has no headersd, but samples are in this order: ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr']
-            try:
-                hmc_0_samples = pd.read_csv(f'{results_dir_hmc_0}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
-                hmc_1_samples = pd.read_csv(f'{results_dir_hmc_1}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
-                hmc_2_samples = pd.read_csv(f'{results_dir_hmc_2}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
-                hmc_3_samples = pd.read_csv(f'{results_dir_hmc_3}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
-                hmc_4_samples = pd.read_csv(f'{results_dir_hmc_4}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
+#             # Load the samples from each hmc run
+#             # They are stored like this: f'{results_dir_hmc}.0/samples_{idx}_{df.experiment_name}_{df.interval}_{df.polarity}.csv'
+#             # csv file has no headersd, but samples are in this order: ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr']
+#             try:
+#                 hmc_0_samples = pd.read_csv(f'{results_dir_hmc_0}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
+#                 hmc_1_samples = pd.read_csv(f'{results_dir_hmc_1}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
+#                 hmc_2_samples = pd.read_csv(f'{results_dir_hmc_2}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
+#                 hmc_3_samples = pd.read_csv(f'{results_dir_hmc_3}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
+#                 hmc_4_samples = pd.read_csv(f'{results_dir_hmc_4}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
 
-                hmc_0_samples.columns = PARAMETERS
-                hmc_1_samples.columns = PARAMETERS
-                hmc_2_samples.columns = PARAMETERS
-                hmc_3_samples.columns = PARAMETERS
-                hmc_4_samples.columns = PARAMETERS
+#                 hmc_0_samples.columns = PARAMETERS
+#                 hmc_1_samples.columns = PARAMETERS
+#                 hmc_2_samples.columns = PARAMETERS
+#                 hmc_3_samples.columns = PARAMETERS
+#                 hmc_4_samples.columns = PARAMETERS
                 
-            except FileNotFoundError as e:
-                print(f"File not found for df idx {idx}: {e}")
-                missing_files.append(e)
-                continue
+#             except FileNotFoundError as e:
+#                 print(f"File not found for df idx {idx}: {e}")
+#                 missing_files.append(e)
+#                 continue
 
-            chains_samples = [hmc_0_samples, hmc_1_samples, hmc_2_samples, hmc_3_samples, hmc_4_samples]
-            rhats = compute_rhat(chains_samples, params=PARAMETERS, mode='split', thin=1, return_details=False)
+#             chains_samples = [hmc_0_samples, hmc_1_samples, hmc_2_samples, hmc_3_samples, hmc_4_samples]
+#             rhats = compute_rhat(chains_samples, params=PARAMETERS, mode='split', thin=1, return_details=False)
 
-            for param, rhat in rhats.items():
-                if isinstance(rhat, tuple):
-                    rhat_value, details = rhat
-                else:
-                    rhat_value = rhat
-                print(f"Which change {which_change}, df idx {idx}, param {param}, R-hat: {rhat_value:.4f}")
+#             for param, rhat in rhats.items():
+#                 if isinstance(rhat, tuple):
+#                     rhat_value, details = rhat
+#                 else:
+#                     rhat_value = rhat
+#                 print(f"Which change {which_change}, df idx {idx}, param {param}, R-hat: {rhat_value:.4f}")
 
-                if which_change == "bootstrapped_data":
-                    bootstrapped_data_rhats[param].append(rhat_value)
-                elif which_change == "model_init":
-                    model_init_rhats[param].append(rhat_value)
-                elif which_change == "hmc_init":
-                    hmc_init_rhats[param].append(rhat_value)
+#                 if which_change == "bootstrapped_data":
+#                     bootstrapped_data_rhats[param].append(rhat_value)
+#                 elif which_change == "model_init":
+#                     model_init_rhats[param].append(rhat_value)
+#                 elif which_change == "hmc_init":
+#                     hmc_init_rhats[param].append(rhat_value)
         
-            if which_change == "bootstrapped_data":
-                existing_df_idxs_data.append(idx)
-            elif which_change == "model_init":
-                existing_df_idxs_model.append(idx)
-            elif which_change == "hmc_init":
-                existing_df_idxs_hmc.append(idx)
+#             if which_change == "bootstrapped_data":
+#                 existing_df_idxs_data.append(idx)
+#             elif which_change == "model_init":
+#                 existing_df_idxs_model.append(idx)
+#             elif which_change == "hmc_init":
+#                 existing_df_idxs_hmc.append(idx)
 
-    # Let's make a 1 x 5 grid of subplots, where each plot is the kl_divergence for each parameter over all the train sizes
-    plots_dir = Path(f'../../../results/{hmc_version}/plots/change_train_size/')
-    plots_dir.mkdir(parents=True, exist_ok=True)
+#     # Let's make a 1 x 5 grid of subplots, where each plot is the kl_divergence for each parameter over all the train sizes
+#     plots_dir = Path(f'../../../results/{hmc_version}/plots/change_train_size/')
+#     plots_dir.mkdir(parents=True, exist_ok=True)
 
-    plt.figure(figsize=(20, 5))
-    plt.suptitle(r"Gelman-Rubin $\hat{R}$ Statistic for " + f"Train Size {int(train_size_fraction * 1_788_892)}")
+#     plt.figure(figsize=(20, 5))
+#     plt.suptitle(r"Gelman-Rubin $\hat{R}$ Statistic for " + f"Train Size {int(train_size_fraction * 1_788_892)}")
 
-    # Plot the R-hat statistics
-    for i, param in enumerate(PARAMETERS):
-        plt.subplot(1, 5, i+1)
-        plt.scatter(existing_df_idxs_hmc, hmc_init_rhats[param], marker='o', alpha=0.5, label='HMC')
-        plt.scatter(existing_df_idxs_model, model_init_rhats[param], marker='o', alpha=0.5, label='Model')
-        plt.scatter(existing_df_idxs_data, bootstrapped_data_rhats[param], marker='o', alpha=0.5, label='Data')
-        plt.hlines(y=1.1, xmin=0, xmax=132, color='r', linestyle='--', label=r'$\hat{R}$=1.1')
-        plt.title(PARAMETERS_NAME[i])
-        plt.ylim(0.99, 1.13)
-        # plt.yscale('log')
-        plt.xlabel('Interval Index')
-        plt.legend()
+#     # Plot the R-hat statistics
+#     for i, param in enumerate(PARAMETERS):
+#         plt.subplot(1, 5, i+1)
+#         plt.scatter(existing_df_idxs_hmc, hmc_init_rhats[param], marker='o', alpha=0.5, label='HMC')
+#         plt.scatter(existing_df_idxs_model, model_init_rhats[param], marker='o', alpha=0.5, label='Model')
+#         plt.scatter(existing_df_idxs_data, bootstrapped_data_rhats[param], marker='o', alpha=0.5, label='Data')
+#         plt.hlines(y=1.1, xmin=0, xmax=132, color='r', linestyle='--', label=r'$\hat{R}$=1.1')
+#         plt.title(PARAMETERS_NAME[i])
+#         plt.ylim(0.99, 1.13)
+#         # plt.yscale('log')
+#         plt.xlabel('Interval Index')
+#         plt.legend()
 
-        if i == 0:
-            plt.ylabel(r'$\hat{R}$ Statistic')
+#         if i == 0:
+#             plt.ylabel(r'$\hat{R}$ Statistic')
 
-    plt.tight_layout()
-    plt.savefig(plots_dir / f'{train_size_fraction}_rhat_statistic.png', dpi=300)
-    plt.savefig(plots_dir / f'{train_size_fraction}_rhat_statistic.pdf', dpi=300)
-    plt.close()
+#     plt.tight_layout()
+#     plt.savefig(plots_dir / f'{train_size_fraction}_rhat_statistic.png', dpi=300)
+#     plt.savefig(plots_dir / f'{train_size_fraction}_rhat_statistic.pdf', dpi=300)
+#     plt.close()
 
-    # Print the idx where r-hat > 1.1 for each parameter and which change
-    for which_change, rhats_dict in zip(which_changes, [bootstrapped_data_rhats, model_init_rhats, hmc_init_rhats]):
-        print(f"R-hat > 1.1 for which change: {which_change}")
-        for param, rhats_list in rhats_dict.items():
-            exceeding_idxs = [i for i, rhat in enumerate(rhats_list) if rhat > 1.1]
-            exceedings_vals = [rhat for rhat in rhats_list if rhat > 1.1]
-            if exceeding_idxs:
-                print(f"  Parameter {param} exceeds R-hat > 1.1 at indices: {exceeding_idxs} with values: {exceedings_vals}")
-            else:
-                print(f"  Parameter {param} does not exceed R-hat > 1.1 at any index.")
+#     # Print the idx where r-hat > 1.1 for each parameter and which change
+#     for which_change, rhats_dict in zip(which_changes, [bootstrapped_data_rhats, model_init_rhats, hmc_init_rhats]):
+#         print(f"R-hat > 1.1 for which change: {which_change}")
+#         for param, rhats_list in rhats_dict.items():
+#             exceeding_idxs = [i for i, rhat in enumerate(rhats_list) if rhat > 1.1]
+#             exceedings_vals = [rhat for rhat in rhats_list if rhat > 1.1]
+#             if exceeding_idxs:
+#                 print(f"  Parameter {param} exceeds R-hat > 1.1 at indices: {exceeding_idxs} with values: {exceedings_vals}")
+#             else:
+#                 print(f"  Parameter {param} does not exceed R-hat > 1.1 at any index.")
 
 print("-----------------------------------\n")
 print("Missing files:")

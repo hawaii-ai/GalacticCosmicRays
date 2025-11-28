@@ -35,9 +35,9 @@ model_version=['init1', 'init2', 'init3', 'init4', 'init5']
 hmc_run = ['hmc1', 'hmc2', 'hmc3', 'hmc4', 'hmc5']
 bootstrap=['b0', 'b1'] # 'b0' or 'b1', false or true
 which_changes = ["bootstrapped_data", "no_bootstrap"] 
-train_size_fraction = 1.0
-closest_interval_test_indices = [179161, 130328, 190205, 53421, 41746, 52043, 8602, 191346, 52370, 53421, 73805, 167295, 116965, 145929, 123931, 115059, 141770, 135188, 51767, 147827, 63696, 36503, 169887, 128417, 128417, 95960, 122810, 184841, 96603, 9294, 162366, 5539, 109824, 66985, 66985, 140477, 112367, 179979, 123830, 193327, 186238, 186238, 190990, 141937, 90300, 35891, 147480, 44612, 44612, 175494, 129093, 179038, 139125, 4930, 48506, 156258, 131482, 131482, 41536, 29117, 46244, 127836, 22559, 71892, 178128, 128912, 79456, 185577, 102420, 6628, 42110, 166989, 59139, 176236, 79456, 176236, 166989, 31271, 81277, 17931, 42227, 186728, 190276, 147244, 57679, 41032, 65183, 65183, 101639, 156396, 99188, 156396, 99733, 175036, 72869, 140338, 118812, 66358, 106364, 88078, 859, 84087, 70969, 19555, 173854, 95756, 77310, 133033, 154065, 155349, 140747, 49419, 115279, 176323, 158278, 66668, 158758, 14947, 64385, 46441, 125301, 168950, 29480, 106848, 50169, 149697, 48742, 86409, 4539, 57414, 129043, 150467]
-hmc_versions=['v34_trial5_ppc_10000_test_most_sim_interval_sampled_False', 'v34_trial5_ppc_10000_test_most_sim_interval_sampled_True']
+train_size_fractions = [0.01, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+valid_interval_indices = [2, 79, 87, 103, 104, 128, 129, 146, 170, 175, 212, 235, 263, 311, 312, 337, 346, 358, 373, 403, 423, 434, 481, 484, 496, 519, 526, 528, 531, 549, 569, 579, 613, 616, 627, 645, 660, 668, 699, 707, 715, 739, 746, 777, 810, 859, 869, 917, 953, 1003, 1023, 1054, 1063, 1093, 1116, 1140, 1141, 1161, 1206, 1218, 1238, 1249, 1267, 1273, 1277, 1279, 1311, 1315, 1349, 1354, 1375, 1394, 1407, 1414, 1432, 1464, 1475, 1477, 1540, 1551, 1589, 1648, 1695, 1761, 1776, 1781, 1846, 1908, 1914, 1949, 1981, 1998, 2035, 2042, 2056, 2127, 2145, 2160, 2188, 2194]
+hmc_versions=['v34_trial5_ppc_10000_interpolated_test_pamela_sampled_False']
 num_bins = 30
 file_version = 'test_data' # 'test_data' or '2023'
 
@@ -361,228 +361,239 @@ One train size and one time interval and varying one of: bootstrapped data, mode
 ---------------------------------------------------------------------------------------
 """
 
-for hmc_version in hmc_versions:
-    # make a file to save the log_prob values
-    output_log_file = f'../../../results/{hmc_version}/plots/ppc_log_prob.csv'
-    save_dir = Path(f'../../../results/{hmc_version}/plots/')
-    save_dir.mkdir(parents=True, exist_ok=True)
+# for hmc_version in hmc_versions:
+#     # make a file to save the log_prob values
+#     output_log_file = f'../../../results/{hmc_version}/plots/ppc_log_prob.csv'
+#     save_dir = Path(f'../../../results/{hmc_version}/plots/')
+#     save_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(output_log_file, 'w') as f:
-        f.write(f"which_change,index,hist_#,param,-log_prob\n")
+#     with open(output_log_file, 'w') as f:
+#         f.write(f"which_change,index,hist_#,param,train_size_fraction,-log_prob\n")
 
-    for i, which_change in enumerate(which_changes):
-        for idx in closest_interval_test_indices:
-            if which_change == "bootstrapped_data":
-                data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_1 = f"{data_version[1]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_2 = f"{data_version[2]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_3 = f"{data_version[3]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_4 = f"{data_version[4]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-            elif which_change == "model_init":
-                data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_1 = f"{data_version[0]}_{bootstrap[1]}_{model_version[1]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_2 = f"{data_version[0]}_{bootstrap[1]}_{model_version[2]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_3 = f"{data_version[0]}_{bootstrap[1]}_{model_version[3]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_4 = f"{data_version[0]}_{bootstrap[1]}_{model_version[4]}_{hmc_run[0]}"
-            elif which_change == "hmc_init":
-                data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_1 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[1]}"
-                data_bootstrap_model_hmc_identifier_2 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[2]}"
-                data_bootstrap_model_hmc_identifier_3 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[3]}"
-                data_bootstrap_model_hmc_identifier_4 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[4]}"
-            else: # Change me manually!
-                data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[0]}_{model_version[0]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_1 = f"{data_version[0]}_{bootstrap[0]}_{model_version[1]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_2 = f"{data_version[0]}_{bootstrap[0]}_{model_version[2]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_3 = f"{data_version[0]}_{bootstrap[0]}_{model_version[3]}_{hmc_run[0]}"
-                data_bootstrap_model_hmc_identifier_4 = f"{data_version[0]}_{bootstrap[0]}_{model_version[4]}_{hmc_run[0]}"
-
-            # Load relevant HMC results
-            results_dir_hmc_0 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_0}_{train_size_fraction}/"
-            results_dir_hmc_1 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_1}_{train_size_fraction}/"
-            results_dir_hmc_2 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_2}_{train_size_fraction}/"
-            results_dir_hmc_3 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_3}_{train_size_fraction}/"
-            results_dir_hmc_4 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_4}_{train_size_fraction}/"
-
-            # Make plots folder if it doesn't exist
-            plots_dir = Path(f'../../../results/{hmc_version}/plots/{which_change}')
-            plots_dir.mkdir(parents=True, exist_ok=True)
-
-            # Initialize exp_name, interval, and polarity for test data
-            df = pd.DataFrame({
-                'experiment_name': ['test_neg'],
-                'interval': ['test_neg'],
-                'polarity': ['neg']
-            })
-            df_int = df.iloc[0]
-            interval = df_int.interval
-            polarity = df_int.polarity
-            exp_name = df_int.experiment_name
-            print(f"Interval {interval} corresponds to index {idx} for {polarity} polarity in {exp_name}.")
-            df_int.head()
-
-            # Load the samples from each hmc run
-            try:
-                # They are stored like this: f'{results_dir_hmc}.0/samples_{idx}_{df.experiment_name}_{df.interval}_{df.polarity}.csv'
-                # csv file has no headers, but samples are in this order: ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr']
-                hmc_0_samples = pd.read_csv(f'{results_dir_hmc_0}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
-                hmc_1_samples = pd.read_csv(f'{results_dir_hmc_1}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
-                hmc_2_samples = pd.read_csv(f'{results_dir_hmc_2}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
-                hmc_3_samples = pd.read_csv(f'{results_dir_hmc_3}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
-                hmc_4_samples = pd.read_csv(f'{results_dir_hmc_4}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
-            
-                hmc_0_samples.columns = PARAMETERS
-                hmc_1_samples.columns = PARAMETERS
-                hmc_2_samples.columns = PARAMETERS
-                hmc_3_samples.columns = PARAMETERS
-                hmc_4_samples.columns = PARAMETERS
-
-            except FileNotFoundError as e:
-                print(f"File not found for train size fraction {train_size_fraction}: {e}")
-                continue
-
-            # Load x_test true parameter value for that index
-            # 8 input parameters for the NN: alpha, cmf, vspoles, cpa, pwr1par, pwr2par, pwr1perr, and pwr2perr.
-            # features = ['alpha', 'cmf', 'cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr', 'vspoles']
-            h5_file = '/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/test.h5'
-
-            # Load test data
-            with h5py.File(h5_file, 'r') as h5:
-                num_test_samples, num_inputs,  = h5['X_minmax'].shape
-                _, num_flux,  = h5['Y_log_scaled'].shape
-            x_test = h5py.File(h5_file, 'r')['X_minmax'][:].reshape(num_test_samples, num_inputs)
-
-            # Hardcoded model choices.
-            # INPUTS = ['alpha', 'cmf', 'cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr', 'vspoles']
-            # HMS Output order = ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr'] (like NN inputs order)
-            # PARAMETERS = ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr'] 
-            # PARAMETERS_MIN = np.array([100., 0.4, 0.4, 0.4, 0.4]) 
-            # PARAMETERS_MAX = np.array([870., 1.7, 1.7, 2.3, 2.3]) 
-            x_test = x_test[idx, :]
-            sampled_parameters = x_test[2:7]
-            true_parameter_values = untransform_input(sampled_parameters)
-
-            print(f'x_test shape: {x_test.shape}\n and values: {x_test}, \nand sampled parameters: {sampled_parameters}')
-            print(f'sampled parameters for index {idx}: {true_parameter_values}')
-
-            # Calculate Gelman-Rubin R-hat statistic for each parameter
-            chains = [hmc_0_samples, hmc_1_samples , hmc_2_samples, hmc_3_samples, hmc_4_samples]
-            rhats = compute_rhat(chains, params=PARAMETERS, mode='split', thin=1, return_details=True)
-            print(rhats)
-            print("R-hat statistics:")
-            for param, rhat in rhats.items():
-                if isinstance(rhat, tuple):
-                    rhat_value, details = rhat
-                    print(f"  {param}: {rhat_value:.4f} (details: m={details['m']}, n={details['n']}, rhat_classic={details['rhat_classic_equivalent']:.4f})")
-                else:
-                    print(f"  {param}: {rhat:.4f}")
-
-            # Plot histograms for each parameter across the chains
-            num_chains = 5
-            scale = True
-
-            chains = [hmc_0_samples, hmc_1_samples, hmc_2_samples, hmc_3_samples, hmc_4_samples]
-            chain_labels = ["1", "2", "3", "4", "5"]
-            colors = plt.cm.Blues(np.linspace(0.4, 1.0, num_chains))
-            param_hist_max = [1.0, 0.04, 0.25, 0.05, 0.25]
-
-            fig, axs = plt.subplots(1, 5, figsize=(20, 6), sharey=False)
-            if which_change == "bootstrapped_data":
-                plt.suptitle(
-                    r"Gelman-Rubin $\hat{R}$ Statistic for Calibration Set "
-                    + f"Across Changing Bootstrapped Data"
-                )
-            elif which_change == "no_bootstrap":
-                plt.suptitle(
-                    r"Gelman-Rubin $\hat{R}$ Statistic for Calibration Set "
-                    + f"Across Changing Model Initializations"
-                )
-
-            for j, param in enumerate(PARAMETERS):
-                # Common bins for this parameter (global binning)
-                vmin = PARAMETERS_MIN[j] - 0.2 * PARAMETERS_MIN[j]
-                vmax = PARAMETERS_MAX[j] + 0.2 * PARAMETERS_MAX[j]
-                bins = np.linspace(vmin, vmax, num_bins + 1)
-                bin_centers = 0.5 * (bins[:-1] + bins[1:])
-                
-                ax = axs[j]
-                max_hist = 0
-                log_prob_true_param = []
-                
-                # Get maximum histogram value across all chains for this parameter
-                for k, (chain, label, color) in list(enumerate(zip(chains, chain_labels, colors))):
-                    samples = chain[param].values
-
-                    hist, _ = np.histogram(samples, bins=bins, density=True)
-
-                    # Find maximum value of hist for each parameter across all chains
-                    if hist.max() > max_hist:
-                        max_hist = hist.max()
-
-                # Ridgeline: each chain is one "ridge" offset in y
-                for k, (chain, label, color) in list(enumerate(zip(chains, chain_labels, colors))):
-                    samples = chain[param].values
-
-                    hist, bin_edges = np.histogram(samples, bins=bins, density=True)
-
-                    # Optionally rescale each ridge to similar height for aesthetics
-                    if scale:
-                        if hist.max() > 0:
-                            hist = hist / max_hist
+#     for i, which_change in enumerate(which_changes):
+#         for idx in valid_interval_indices:
+#             for train_size_fraction in train_size_fractions:
+#                 if which_change == "bootstrapped_data":
+#                     data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_1 = f"{data_version[1]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_2 = f"{data_version[2]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_3 = f"{data_version[3]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_4 = f"{data_version[4]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#                 elif which_change == "model_init":
+#                     data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_1 = f"{data_version[0]}_{bootstrap[1]}_{model_version[1]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_2 = f"{data_version[0]}_{bootstrap[1]}_{model_version[2]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_3 = f"{data_version[0]}_{bootstrap[1]}_{model_version[3]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_4 = f"{data_version[0]}_{bootstrap[1]}_{model_version[4]}_{hmc_run[0]}"
+#                 elif which_change == "hmc_init":
+#                     data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_1 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[1]}"
+#                     data_bootstrap_model_hmc_identifier_2 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[2]}"
+#                     data_bootstrap_model_hmc_identifier_3 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[3]}"
+#                     data_bootstrap_model_hmc_identifier_4 = f"{data_version[0]}_{bootstrap[1]}_{model_version[0]}_{hmc_run[4]}"
+#                 else: # Change me manually!
+#                     data_bootstrap_model_hmc_identifier_0 = f"{data_version[0]}_{bootstrap[0]}_{model_version[0]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_1 = f"{data_version[0]}_{bootstrap[0]}_{model_version[1]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_2 = f"{data_version[0]}_{bootstrap[0]}_{model_version[2]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_3 = f"{data_version[0]}_{bootstrap[0]}_{model_version[3]}_{hmc_run[0]}"
+#                     data_bootstrap_model_hmc_identifier_4 = f"{data_version[0]}_{bootstrap[0]}_{model_version[4]}_{hmc_run[0]}"
                     
-                    offset = k  # vertical offset for this chain
+#                     if train_size_fraction != 1.0:
+#                         print("For this 'else' case, only running for train_size_fraction=1.0")
+#                         continue
+
+#                 # Load relevant HMC results
+#                 results_dir_hmc_0 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_0}_{train_size_fraction}/"
+#                 results_dir_hmc_1 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_1}_{train_size_fraction}/"
+#                 results_dir_hmc_2 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_2}_{train_size_fraction}/"
+#                 results_dir_hmc_3 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_3}_{train_size_fraction}/"
+#                 results_dir_hmc_4 = f"../../../results/{hmc_version}/{data_bootstrap_model_hmc_identifier_4}_{train_size_fraction}/"
+
+#                 # Make plots folder if it doesn't exist
+#                 plots_dir = Path(f'../../../results/{hmc_version}/plots/{which_change}')
+#                 plots_dir.mkdir(parents=True, exist_ok=True)
+
+#                 # Initialize exp_name, interval, and polarity for test data
+#                 df = pd.DataFrame({
+#                     'experiment_name': ['test_neg'],
+#                     'interval': ['test_neg'],
+#                     'polarity': ['neg']
+#                 })
+#                 df_int = df.iloc[0]
+#                 interval = df_int.interval
+#                 polarity = df_int.polarity
+#                 exp_name = df_int.experiment_name
+#                 print(f"Interval {interval} corresponds to index {idx} for {polarity} polarity in {exp_name}.")
+#                 df_int.head()
+
+#                 # Load the samples from each hmc run
+#                 try:
+#                     # They are stored like this: f'{results_dir_hmc}.0/samples_{idx}_{df.experiment_name}_{df.interval}_{df.polarity}.csv'
+#                     # csv file has no headers, but samples are in this order: ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr']
+#                     hmc_0_samples = pd.read_csv(f'{results_dir_hmc_0}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
+#                     hmc_1_samples = pd.read_csv(f'{results_dir_hmc_1}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
+#                     hmc_2_samples = pd.read_csv(f'{results_dir_hmc_2}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
+#                     hmc_3_samples = pd.read_csv(f'{results_dir_hmc_3}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
+#                     hmc_4_samples = pd.read_csv(f'{results_dir_hmc_4}samples_{idx}_{exp_name}_{interval}_{polarity}.csv', header=None, delimiter=',')
+                
+#                     hmc_0_samples.columns = PARAMETERS
+#                     hmc_1_samples.columns = PARAMETERS
+#                     hmc_2_samples.columns = PARAMETERS
+#                     hmc_3_samples.columns = PARAMETERS
+#                     hmc_4_samples.columns = PARAMETERS
+
+#                 except FileNotFoundError as e:
+#                     print(f"File not found for train size fraction {train_size_fraction}: {e}")
+#                     continue
+
+#                 # Load x_test true parameter value for that index
+#                 # 8 input parameters for the NN: alpha, cmf, vspoles, cpa, pwr1par, pwr2par, pwr1perr, and pwr2perr.
+#                 # features = ['alpha', 'cmf', 'cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr', 'vspoles']
+#                 h5_file = '/home/linneamw/sadow_koastore/personal/linneamw/research/gcr/data/shuffled_may2025/neg/test.h5'
+
+#                 # Load test data
+#                 with h5py.File(h5_file, 'r') as h5:
+#                     num_test_samples, num_inputs,  = h5['X_minmax'].shape
+#                     _, num_flux,  = h5['Y_log_scaled'].shape
+#                 x_test = h5py.File(h5_file, 'r')['X_minmax'][:].reshape(num_test_samples, num_inputs)
+
+#                 # Hardcoded model choices.
+#                 # INPUTS = ['alpha', 'cmf', 'cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr', 'vspoles']
+#                 # HMS Output order = ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr'] (like NN inputs order)
+#                 # PARAMETERS = ['cpa', 'pwr1par', 'pwr1perr', 'pwr2par', 'pwr2perr'] 
+#                 # PARAMETERS_MIN = np.array([100., 0.4, 0.4, 0.4, 0.4]) 
+#                 # PARAMETERS_MAX = np.array([870., 1.7, 1.7, 2.3, 2.3]) 
+#                 x_test = x_test[idx, :]
+#                 sampled_parameters = x_test[2:7]
+#                 true_parameter_values = untransform_input(sampled_parameters)
+
+#                 print(f'x_test shape: {x_test.shape}\n and values: {x_test}, \nand sampled parameters: {sampled_parameters}')
+#                 print(f'sampled parameters for index {idx}: {true_parameter_values}')
+
+#                 # Calculate Gelman-Rubin R-hat statistic for each parameter
+#                 chains = [hmc_0_samples, hmc_1_samples , hmc_2_samples, hmc_3_samples, hmc_4_samples]
+#                 rhats = compute_rhat(chains, params=PARAMETERS, mode='split', thin=1, return_details=True)
+#                 print(rhats)
+#                 print("R-hat statistics:")
+#                 for param, rhat in rhats.items():
+#                     if isinstance(rhat, tuple):
+#                         rhat_value, details = rhat
+#                         print(f"  {param}: {rhat_value:.4f} (details: m={details['m']}, n={details['n']}, rhat_classic={details['rhat_classic_equivalent']:.4f})")
+#                     else:
+#                         print(f"  {param}: {rhat:.4f}")
+
+#                 # Plot histograms for each parameter across the chains
+#                 num_chains = 5
+#                 scale = True
+
+#                 chains = [hmc_0_samples, hmc_1_samples, hmc_2_samples, hmc_3_samples, hmc_4_samples]
+#                 chain_labels = ["1", "2", "3", "4", "5"]
+#                 colors = plt.cm.Blues(np.linspace(0.4, 1.0, num_chains))
+#                 param_hist_max = [1.0, 0.04, 0.25, 0.05, 0.25]
+
+#                 fig, axs = plt.subplots(1, 5, figsize=(20, 6), sharey=False)
+#                 if which_change == "bootstrapped_data":
+#                     plt.suptitle(
+#                         r"Gelman-Rubin $\hat{R}$ Statistic for Test Example "
+#                         + f"{idx} and Train Size {int(train_size_fraction*1_788_892)} Across Changing Bootstrapped Data"
+#                     )
+#                 elif which_change == "no_bootstrap":
+#                     plt.suptitle(
+#                         r"Gelman-Rubin $\hat{R}$ Statistic for Test Example "
+#                         + f"{idx} and Train Size {int(train_size_fraction*1_788_892)} Across Changing Model Initializations"
+#                     )
+
+#                 for j, param in enumerate(PARAMETERS):
+#                     # Common bins for this parameter (global binning)
+#                     vmin = PARAMETERS_MIN[j] - 0.2 * PARAMETERS_MIN[j]
+#                     vmax = PARAMETERS_MAX[j] + 0.2 * PARAMETERS_MAX[j]
+#                     bins = np.linspace(vmin, vmax, num_bins + 1)
+#                     bin_centers = 0.5 * (bins[:-1] + bins[1:])
                     
-                    # Filled area
-                    ax.fill_between(
-                        bin_centers,
-                        offset,
-                        hist + offset,
-                        alpha=0.6,
-                        linewidth=0.5,
-                        edgecolor="black",
-                        color=color,
-                    )
+#                     ax = axs[j]
+#                     max_hist = 0
+#                     log_prob_true_param = []
+                    
+#                     # Get maximum histogram value across all chains for this parameter
+#                     for k, (chain, label, color) in list(enumerate(zip(chains, chain_labels, colors))):
+#                         samples = chain[param].values
 
-                    # Outline
-                    ax.plot(bin_centers, hist + offset, linewidth=1.0, color="black")
+#                         hist, _ = np.histogram(samples, bins=bins, density=True)
 
-                    # Calulcate the log probability of the true parameter value under this chain's histogram
-                    log_prob_value = histogram_log_prob(true_parameter_values[j], hist, bin_edges)
-                    log_prob_true_param.append(log_prob_value)
+#                         # Find maximum value of hist for each parameter across all chains
+#                         if hist.max() > max_hist:
+#                             max_hist = hist.max()
 
-                    # Save to file which_change,index,hist_#,param,-log_prob
-                    with open(output_log_file, 'a') as f:
-                        f.write(f"{which_change},{idx},{k},{param},{-1 * log_prob_value}\n")
+#                     # Ridgeline: each chain is one "ridge" offset in y
+#                     for k, (chain, label, color) in list(enumerate(zip(chains, chain_labels, colors))):
+#                         samples = chain[param].values
 
-                # Plot true parameter value line
-                ax.axvline(
-                    true_parameter_values[j],
-                    color='red',
-                    lw=2,
-                    linestyle='--',
-                    label='True value'
-                )
+#                         hist, bin_edges = np.histogram(samples, bins=bins, density=True)
 
-                avg_log_prob = np.mean(log_prob_true_param)
-                ax.set_title(f"{PARAMETERS_NAME[j]} " +  f"(-log prob.={-1 * avg_log_prob:.2f}; " + r"$\hat{R}$=" + f"{rhats[param][0]:.2f})")
-                
-                ax.set_xlim(vmin, vmax)
-                ax.set_yticks(range(num_chains))
-                ax.set_yticklabels(chain_labels)
-                ax.set_xlabel("Parameter value")
-                if j == 0:
-                    ax.set_ylabel("Chain #")
-                
-                # Clean up spines for a more "joyplot" aesthetic
-                ax.spines["top"].set_visible(False)
-                ax.spines["right"].set_visible(False)
+#                         # Optionally rescale each ridge to similar height for aesthetics
+#                         if scale:
+#                             if hist.max() > 0:
+#                                 hist = hist / max_hist
+                        
+#                         offset = k  # vertical offset for this chain
+                        
+#                         # Filled area
+#                         ax.fill_between(
+#                             bin_centers,
+#                             offset,
+#                             hist + offset,
+#                             alpha=0.6,
+#                             linewidth=0.5,
+#                             edgecolor="black",
+#                             color=color,
+#                         )
 
-            plt.tight_layout(rect=[0, 0, 1, 0.95])
-            plt.savefig(plots_dir / f'calibration_histogram_{idx}.png', dpi=300)
-            plt.savefig(plots_dir / f'calibration_histogram_{idx}.pdf')
-            plt.close()
+#                         # Outline
+#                         ax.plot(bin_centers, hist + offset, linewidth=1.0, color="black")
 
+#                         # Calulcate the log probability of the true parameter value under this chain's histogram
+#                         log_prob_value = histogram_log_prob(true_parameter_values[j], hist, bin_edges)
+#                         log_prob_true_param.append(log_prob_value)
 
+#                         # Save to file which_change,index,hist_#,param,-log_prob
+#                         with open(output_log_file, 'a') as f:
+#                             f.write(f"{which_change},{idx},{k},{param},{train_size_fraction},{-1 * log_prob_value}\n")
+
+#                     # Plot true parameter value line
+#                     ax.axvline(
+#                         true_parameter_values[j],
+#                         color='red',
+#                         lw=2,
+#                         linestyle='--',
+#                         label='True value'
+#                     )
+
+#                     avg_log_prob = np.mean(log_prob_true_param)
+#                     ax.set_title(f"{PARAMETERS_NAME[j]} " +  f"(-log prob.={-1 * avg_log_prob:.2f}; " + r"$\hat{R}$=" + f"{rhats[param][0]:.2f})")
+                    
+#                     ax.set_xlim(vmin, vmax)
+#                     ax.set_yticks(range(num_chains))
+#                     ax.set_yticklabels(chain_labels)
+#                     ax.set_xlabel("Parameter value")
+#                     if j == 0:
+#                         ax.set_ylabel("Chain #")
+                    
+#                     # Clean up spines for a more "joyplot" aesthetic
+#                     ax.spines["top"].set_visible(False)
+#                     ax.spines["right"].set_visible(False)
+
+#                 plt.tight_layout(rect=[0, 0, 1, 0.95])
+#                 plt.savefig(plots_dir / f'calibration_histogram_{idx}_train_size_{train_size_fraction}.png', dpi=300)
+#                 plt.savefig(plots_dir / f'calibration_histogram_{idx}_train_size_{train_size_fraction}.pdf')
+#                 plt.close()
+
+"""
+---------------------------------------------------------------------------------------
+PLOT A SUMMARY OF ALL RUNS
+All trains sizes and all changes, average the log probability of true parameters across test set examples
+---------------------------------------------------------------------------------------
+"""
+num_chains = 5
 for hmc_version in hmc_versions:
     # Read from the log prob file and plot idx vs. avg -log_prob for 5 parameters, separately for each which_change
     output_log_file = f'../../../results/{hmc_version}/plots/ppc_log_prob.csv'
@@ -593,21 +604,67 @@ for hmc_version in hmc_versions:
     for which_change in which_changes:
         df_subset = df_log[df_log.which_change == which_change]
 
-        fig, axs = plt.subplots(1, 5, figsize=(20, 6), sharey=False)
-        plt.suptitle(f"-Log Probability of True Parameter Value vs. Test Set Index")
+        if which_change == "no_bootstrap":
+            train_size_fraction = 1.0
+            fig, axs = plt.subplots(1, 5, figsize=(20, 5), sharey=False)
+            plt.suptitle(f"-Log Probability of True Parameter Value vs. Test Set Index for Train Size {1_788_892}")
 
-        for j, param in enumerate(PARAMETERS):
+            # Plot log probability vs. test set index for 1 training set size
+            for j, param in enumerate(PARAMETERS):
+                for k in range(num_chains):
+                    df_param_chain = df_subset[(df_subset.param == param) & (df_subset['hist_#'] == k)]
+                    axs[j].scatter(df_param_chain['index'], df_param_chain['-log_prob'], marker='o', alpha=0.3, label=f"Chain {k+1}")
+
+                axs[j].set_xlabel("Test Set Index")
+                axs[j].set_title(f"{PARAMETERS_NAME[j]}")
+                if j == 0:
+                    axs[j].set_ylabel("-Log Probability")
+
+            plt.tight_layout()
+            plt.savefig(save_dir / f'avg_log_prob_idx_{which_change}.png', dpi=300)
+            plt.savefig(save_dir / f'avg_log_prob_idx_{which_change}.pdf')
+            plt.close()
+
+        elif which_change == "bootstrapped_data":
+            param_avg_neg_log_probs = {}
+            param_avg_neg_log_probs['cpa'] = {}
+            param_avg_neg_log_probs['pwr1par'] = {}
+            param_avg_neg_log_probs['pwr1perr'] = {}
+            param_avg_neg_log_probs['pwr2par'] = {}
+            param_avg_neg_log_probs['pwr2perr'] = {}
+
             for k in range(num_chains):
-                df_param_chain = df_subset[(df_subset.param == param) & (df_subset['hist_#'] == k)]
-                axs[j].plot(df_param_chain['index'], df_param_chain['-log_prob'], marker='o', alpha=0.3, label=f"Chain {k+1}")
+                param_avg_neg_log_probs['cpa'][f'{k}'] = []
+                param_avg_neg_log_probs['pwr1par'][f'{k}'] = []
+                param_avg_neg_log_probs['pwr1perr'][f'{k}'] = []
+                param_avg_neg_log_probs['pwr2par'][f'{k}'] = []
+                param_avg_neg_log_probs['pwr2perr'][f'{k}'] = []
 
-            axs[j].set_xlabel("Test Set Index")
-            axs[j].set_title(f"{PARAMETERS_NAME[j]}")
-            if j == 0:
-                axs[j].set_ylabel("Average -Log Probability of True Parameter Value")
-            axs[j].legend(loc='upper right')
+            # Plot (for hist_# 0) log probability vs. train size fraction, averaged over test set indices
+            for train_size_fraction in train_size_fractions:
+                for k in range(num_chains):
+                    df_hist = df_subset[df_subset['hist_#'] == k]
+                    df_train_size = df_hist[df_hist['train_size_fraction'] == train_size_fraction]
 
-        plt.tight_layout()
-        plt.savefig(save_dir / f'avg_log_prob_{which_change}.png', dpi=300)
-        plt.savefig(save_dir / f'avg_log_prob_{which_change}.pdf')
-        plt.close()
+                    for j, param in enumerate(PARAMETERS):
+                        df_param = df_train_size[df_train_size.param == param]
+                        param_avg_neg_log_probs[param][f'{k}'].append(df_param['-log_prob'].mean())
+
+            fig, axs = plt.subplots(1, 5, figsize=(20, 5), sharey=False)
+            plt.suptitle(f"Average -Log Probability of True Parameter Value vs. Train Size")
+            train_sizes = np.array(train_size_fractions) * 1_788_892
+
+            for j, param in enumerate(PARAMETERS):
+                for k in range(num_chains):
+                    axs[j].plot(train_sizes, param_avg_neg_log_probs[param][f'{k}'], marker='o', alpha=0.5, label=f'Chain {k+1}')
+
+                axs[j].set_xlabel("Train Size")
+                axs[j].set_title(f"{PARAMETERS_NAME[j]}")
+                if j == 0:
+                    axs[j].set_ylabel("Average -Log Probability")
+                axs[j].legend()
+
+            plt.tight_layout()
+            plt.savefig(save_dir / f'avg_log_prob_train_size_{which_change}.png', dpi=300)
+            plt.savefig(save_dir / f'avg_log_prob_train_size_{which_change}.pdf')
+            plt.close()
