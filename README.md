@@ -1,7 +1,7 @@
 # GalacticCosmicRays
 This repository contains code and data for the paper "Neural Surrogate HMC: On Using Neural Likelihoods for Hamiltonian Monte Carlo in Simulation-Based Inference" by Wolniewicz et al. (https://arxiv.org/abs/2407.20432).
 
-Corresponding data for the project and paper can be found on Zenodo, in 4 parts:
+Corresponding data for the project and paper can be found on Zenodo in community https://zenodo.org/communities/neural_surrogate_hmc/about. The DOIs for the four parts of the dataset are:
     Part 1/4: DOI 10.5281/zenodo.17729139
     Part 2/4: DOI 10.5281/zenodo.17764339
     Part 3/4: DOI 10.5281/zenodo.17764343
