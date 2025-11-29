@@ -1,7 +1,11 @@
 # GalacticCosmicRays
 This repository contains code and data for the paper "Neural Surrogate HMC: On Using Neural Likelihoods for Hamiltonian Monte Carlo in Simulation-Based Inference" by Wolniewicz et al. (https://arxiv.org/abs/2407.20432).
 
-Corresponding data for the project and paper can be found on Zenodo, DOI: 10.5281/zenodo.17729139
+Corresponding data for the project and paper can be found on Zenodo, in 4 parts:
+    Part 1/4: DOI 10.5281/zenodo.17729139
+    Part 2/4: DOI 10.5281/zenodo.17764339
+    Part 3/4: DOI 10.5281/zenodo.17764343
+    Part 4/4: DOI 10.5281/zenodo.17764345
 
 The code in this repository is used to generate samples from the posterior of galactic cosmic ray transport parameters using Hamiltonian Monte Carlo (HMC) with a neural network surrogate likelihood. The neural network is trained to emulate the output of a physics-based cosmic ray transport simulation, allowing for efficient sampling of the posterior distribution of model parameters given observational data.
 
