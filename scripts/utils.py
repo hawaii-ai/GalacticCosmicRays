@@ -145,7 +145,7 @@ def get_parameters(filename, interval: str = None, return_std=False, constant_vs
                 row['vspoles_std'].values[0])
     
 
-def load_data_ams(filename, integrate=False):
+def load_data_ams(filename, integrate=False, split_uncertainty=False):
     """ Load AMS data from Claudio. Each file contains measurements over a certain time interval. 
     Args:
         filename = Filename of observations.
@@ -154,9 +154,15 @@ def load_data_ams(filename, integrate=False):
                    New yearly datasets are in '../data/2024/yearly'
         integrate = If True, integrate over bin regions, so return r1, r2
                 Otherwise, interpolate flux at the geoemtric mean of the bin and return bin_midpoints
+        split_uncertainty = If True, then use split uncertainty for AMS_02 data. This means that instead of using the total uncertainty, there are two uncertainties.
     """
-    dataset_ams = np.loadtxt(filename, usecols=(0,1,2,3)) # Rigidity1, Rigidity2, Flux, Error, dataset (only if yearly dataset)
-    uncertainty = dataset_ams[:,3]
+    if not split_uncertainty:
+        dataset_ams = np.loadtxt(filename, usecols=(0,1,2,3)) # Rigidity1, Rigidity2, Flux, Error, dataset (only if yearly dataset)
+        uncertainty = dataset_ams[:,3]
+    else:
+        dataset_ams = np.loadtxt(filename, usecols=(0,1,2,3,4)) # Rigidity1, Rigidity2, Flux, Statistical Error, Systematic Error, dataset (only if yearly dataset)
+        statistical_uncertainty = dataset_ams[:,3]
+        systematic_uncertainty = dataset_ams[:,4]
 
     r1, r2 = dataset_ams[:,0], dataset_ams[:,1]
 
@@ -173,10 +179,14 @@ def load_data_ams(filename, integrate=False):
     # bin_midpoints = (r1 + r2)/2  # Arithmetic mean
     bin_midpoints = (r1 * r2) ** 0.5  # Geometric mean seemed to work better in exp.
 
-    if integrate:
+    if integrate and not split_uncertainty:
         return bins, zip(r1, r2), observed, uncertainty
-    else:
+    elif not integrate and not split_uncertainty:
         return bins, bin_midpoints, observed, uncertainty
+    elif integrate and split_uncertainty:
+        return bins, zip(r1, r2), observed, statistical_uncertainty, systematic_uncertainty
+    elif not integrate and split_uncertainty:
+        return bins, bin_midpoints, observed, statistical_uncertainty, systematic_uncertainty
 
 
 def load_preprocessed_data_ams(filename, integrate=False):
@@ -294,7 +304,7 @@ def _form_batch(params_trans, params_spec_trans):
     #     raise Exception()
     return xs
 
-def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9, integrate=False, par_equals_perr=False):
+def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9, integrate=False, par_equals_perr=False, prior='uniform', split_uncertainty=False, w=1.0, k=1.0):
     """
     Calculate the logliklihood of hmc parameters given the data.
 
@@ -305,6 +315,13 @@ def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9, in
         penalty = scalar to punish drifting outside zone of interest. 
         integrate: If True, integrate over bin regions. Otherwise, interpolate flux at the geoemtric mean of the bin.
         par_equals_perr: If True, then perr = par, and the MCMC only samples 3 parameters.
+        prior: 'uniform' or 'gaussian'. If 'gaussian', then add gaussian prior on index 0 (cpa) with mean 0.2 and std 0.2. 
+              If 'uniform', then just use uniform prior in region of training data. In either case, also add penalty for being outside region of training data.
+        split_uncertainty: If True, then use split uncertainty for AMS_02 data.
+        w: scalar between 0 and 1, used in split uncertainty calculation. w = 1 recovers the non-split uncertainty case. Only used if split_uncertainty is True.
+        k: scalar greater than 0, used in split uncertainty calculation. k = 1 recovers the non-split uncertainty case. Only used if split_uncertainty is True.
+    Returns:
+        target_log_prob: function that takes in hmc parameters and returns loglikelihood of those parameters given the data.
     """
 
     # Load trained NN model that maps 8 parameters to predicted flux at RIGIDITY_VALS.
@@ -312,10 +329,14 @@ def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9, in
     model.run_eagerly = True # Settable attribute (in elegy). Required to be true for ppmodel.
 
     # Load observation data from Claudio
-    if integrate:
-        bins, r1r2, observed, uncertainty = load_data_ams(data_path, integrate)
-    else:
-        bins, bin_midpoints, observed, uncertainty = load_data_ams(data_path, integrate)
+    if integrate and not split_uncertainty:
+        bins, r1r2, observed, uncertainty = load_data_ams(data_path, integrate, split_uncertainty)
+    elif not integrate and not split_uncertainty:
+        bins, bin_midpoints, observed, uncertainty = load_data_ams(data_path, integrate, split_uncertainty)
+    elif integrate and split_uncertainty:
+        bins, r1r2, observed, statistical_uncertainty, systematic_uncertainty = load_data_ams(data_path, integrate, split_uncertainty)
+    elif not integrate and split_uncertainty:
+        bins, bin_midpoints, observed, statistical_uncertainty, systematic_uncertainty = load_data_ams(data_path, integrate, split_uncertainty)
 
     # Transform input parameters to be in range 0--1.
     parameters_specified_transformed = transform_input(jnp.array(parameters_specified))
@@ -335,6 +356,17 @@ def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9, in
 
         # Include logprior in loglikelihood. This keeps HMC from going off into no-mans land.
         nlogprior = 0.
+
+        if prior == 'gaussian':
+            # --- GAUSSIAN PRIOR FOR INDEX 0 ---
+            # cpa min = 100 & max = 870, so 0.1 ~ 77
+            mu = 0.2  # Define the peak value (mean)
+            sigma = 0.2 # Define the spread (standard deviation)
+            
+            # Add the negative log-probability of a Gaussian
+            nlogprior += (xs[0] - mu)**2 / (2.0 * sigma**2)
+
+        # Uniform prior in region of training data
         for i in range(5):
             nlogprior += penalty * jnp.abs((jnp.minimum(0., xs[i]))) # Penalty for being <0
             nlogprior += penalty * jnp.abs((jnp.maximum(1., xs[i]) - 1.))  # Penalty for being >1
@@ -364,9 +396,40 @@ def define_log_prob(model_path, data_path, parameters_specified, penalty=1e9, in
                 interpolated = chi2.interpolate_model(x)
                 yhat_interp_integrated.append(interpolated)
         
-        # Compute log prob
-        chi2 = (((jnp.asarray(yhat_interp_integrated) - observed)/uncertainty)**2).sum()
-        log_prob = -chi2/2.  - nlogprior
+        # Compute the log probability given an uncertainty distribution
+        if not split_uncertainty:
+            # this uncertainty comes from sqrt(statistical_uncertainty**2 + systematic_uncertainty**2)
+            chi2 = (((jnp.asarray(yhat_interp_integrated) - observed)/uncertainty)**2).sum()
+            log_prob = -chi2/2.  - nlogprior
+            
+        else: 
+            # sigma1 = sqrt(dF_stat_i^2 + dF_syst_i^2) 
+            # sigma2 = sqrt(dF_stat_i^2 + k^2 * dF_syst_i^2)
+            # ln L = -chi2(sigma1)/2 + ln { (1 + (1-w)/w*exp[chi2(sigma1)/2 - chi2(sigma2)/2]) }
+
+            sigma1 = jnp.sqrt(statistical_uncertainty**2 + systematic_uncertainty**2)
+            sigma2 = jnp.sqrt(statistical_uncertainty**2 + (k**2 * systematic_uncertainty**2))
+            
+            # Calculate chi2 per bin
+            chi2_1_i = ((jnp.asarray(yhat_interp_integrated) - observed) / sigma1)**2
+            chi2_2_i = ((jnp.asarray(yhat_interp_integrated) - observed) / sigma2)**2
+
+            if w != 1.0:
+                # Per-bin log components excluding the -ln(sigma) normalization terms
+                term1 = jnp.log(w) - (chi2_1_i / 2.)
+                term2 = jnp.log(1.0 - w) - (chi2_2_i / 2.)
+                
+                # calculate ln(exp(term1) + exp(term2)) per bin without overflowing
+                log_prob_i = jnp.logaddexp(term1, term2)
+                
+                # Sum the probabilities over all bins after calculating the mixture
+                log_prob = log_prob_i.sum() - nlogprior
+                
+            else:
+                # If w=1, calculate per bin without normalization, then sum
+                log_prob_i = -(chi2_1_i / 2.)
+                log_prob = log_prob_i.sum() - nlogprior
+        
         return log_prob
 
     return target_log_prob

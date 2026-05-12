@@ -70,6 +70,10 @@ train_size = float(train_size_env) if train_size_env is not None else None
 bootstrap = os.getenv('BOOTSTRAP', default='b0')
 model_save_dir = os.getenv('MODEL_SAVE_DIR', default=None)
 mcmc_or_hmc = os.getenv('MCMC_OR_HMC', default='hmc')
+prior = os.getenv('PRIOR', default='uniform')
+split_uncertainty = str2bool(os.getenv('SPLIT_UNCERTAINTY', default=False))
+w = float(os.getenv('W', default=1.0)) # Only used if split_uncertainty is True
+k = float(os.getenv('K', default=1.0)) # Only used if split_uncertainty is True
 
 # Setup  output directory.
 results_dir = f'../../results/{hmc_version}/'
@@ -82,9 +86,13 @@ if file_version == '2023':
     df = utils.index_mcmc_runs(file_version=file_version)  # List of all experiments (0-209) for '2023', 0-14 for '2024'
     print(f'Found {df.shape[0]} combinations to run MCMC on. Performing MCMC on index {SLURM_ARRAY_TASK_ID}.')
     df = df.iloc[SLURM_ARRAY_TASK_ID]
-
-    data_path = f'../data/oct2022/{df.experiment_name}/{df.experiment_name}_{df.interval}.dat'  # This data is the same.
     specified_parameters = utils.get_parameters(df.filename_heliosphere, df.interval, constant_vspoles=constant_vspoles)
+
+    if not split_uncertainty:
+        data_path = f'../data/oct2022/{df.experiment_name}/{df.experiment_name}_{df.interval}.dat'  # This data is the same.
+    else:
+        # Experiment with split uncertainty for AMS_02 data
+        data_path = f'../data/AMS02_H-PRL2021_split_uncertainty/{df.interval}.dat'
 
 elif file_version == '2024': 
     # Select experiment parameters
@@ -139,7 +147,7 @@ elif 'test' in file_version:
     specified_parameters = pd.read_csv(spec_params_file).values[SLURM_ARRAY_TASK_ID]
 
 else:
-    raise ValueError(f"Invalid file_version {file_version}. Must be '2023', '2024', or 'test_...'.")
+    raise ValueError(f"Invalid file_version {file_version}. Must be '2023', '2024', 'AMS02_H-PRL2021_split_uncertainty', or 'test_...'.")
 
 # Load NN model
 if train_size is not None:
@@ -159,7 +167,7 @@ if par_equals_perr:
 else:
     num_params = 5
 
-target_log_prob = utils.define_log_prob(model_path, data_path, specified_parameters, penalty=penalty, integrate=integrate, par_equals_perr=par_equals_perr)
+target_log_prob = utils.define_log_prob(model_path, data_path, specified_parameters, penalty=penalty, integrate=integrate, par_equals_perr=par_equals_perr, prior=prior, split_uncertainty=split_uncertainty, w=w, k=k)
 
 # Hyperparameters for MCMC
 if DEBUG:

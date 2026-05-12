@@ -41,4 +41,6 @@ models/model_size_investigation
 # Results
 *.png
 *.pdf
+*.gz
+*.xz
 *.zip
